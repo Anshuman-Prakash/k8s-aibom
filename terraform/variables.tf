@@ -35,7 +35,7 @@ variable "cluster_location" {
 }
 
 variable "repository_id" {
-  description = "The name of the Artifact Registry repository to create."
+  description = "The Artifact Registry repository to create. Only used when build_from_source = true."
   type        = string
   default     = "aibom-repo"
 }
@@ -46,7 +46,20 @@ variable "namespace" {
   default     = "k8s-aibom-system"
 }
 
-variable "image_tag" {
-  description = "The image tag to apply to the built container."
+variable "chart_version" {
+  description = "Version of the published k8s-aibom Helm chart to install (oci://ghcr.io/googlecloudplatform/charts/k8s-aibom). The published chart pins the controller image by digest and ships provenance and SBOM attestations."
   type        = string
+  default     = "1.5.0"
+}
+
+variable "build_from_source" {
+  description = "Air-gap / development path: build the controller image from this checkout via Cloud Build and deploy the local chart with the image overridden. Defaults to false — the default install uses the published, signed, digest-pinned artifact and requires no Cloud Build or Artifact Registry. See docs/building-from-source.md."
+  type        = bool
+  default     = false
+}
+
+variable "image_tag" {
+  description = "Image tag for the locally built container. Only used (and required) when build_from_source = true."
+  type        = string
+  default     = ""
 }
