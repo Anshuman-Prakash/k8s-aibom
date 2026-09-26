@@ -32,9 +32,7 @@ func TestTerraformK8sAibom(t *testing.T) {
 
 	// 2. Generate unique identifiers to prevent collisions during concurrent CI runs
 	uniqueID := strings.ToLower(random.UniqueID())
-	repositoryID := fmt.Sprintf("aibom-repo-%s", uniqueID)
 	namespace := fmt.Sprintf("aibom-ns-%s", uniqueID)
-	imageTag := fmt.Sprintf("v1.0.0-%s", uniqueID)
 
 	// Copy the terraform folder to a temp folder so tests can run in parallel without state collisions
 	tempTestFolder := test_structure.CopyTerraformFolderToTemp(t, "../..", "terraform")
@@ -42,13 +40,14 @@ func TestTerraformK8sAibom(t *testing.T) {
 	// 3. Configure Terraform Options
 	terraformOptions := terraform.WithDefaultRetryableErrors(t, &terraform.Options{
 		TerraformDir: tempTestFolder,
+		// Default path: the published, digest-pinned chart. The
+		// build_from_source path (Cloud Build + Artifact Registry) is
+		// opt-in and exercised manually, not in CI.
 		Vars: map[string]interface{}{
 			"project_id":       projectID,
 			"cluster_name":     clusterName,
 			"cluster_location": clusterLocation,
-			"repository_id":    repositoryID,
 			"namespace":        namespace,
-			"image_tag":        imageTag,
 		},
 	})
 

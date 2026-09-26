@@ -51,8 +51,16 @@ provider "helm" {
   }
 }
 
-# 1. Provision the Artifact Registry
+# The default install deploys the PUBLISHED chart from ghcr.io: the
+# image is digest-pinned by the chart, and every release carries
+# provenance and SBOM attestations. Building from source is the
+# explicit opt-in air-gap/development path (build_from_source = true);
+# it is the only case that provisions Artifact Registry and runs
+# Cloud Build.
+
+# 1. Provision the Artifact Registry (source builds only)
 resource "google_artifact_registry_repository" "aibom_repo" {
+  count         = var.build_from_source ? 1 : 0
   location      = var.region
   repository_id = var.repository_id
   description   = "k8s-aibom controller image repository"
@@ -60,8 +68,17 @@ resource "google_artifact_registry_repository" "aibom_repo" {
   project       = var.project_id
 }
 
-# 2. Build and push the image via Cloud Build (AMD64 natively)
+# 2. Build and push the image via Cloud Build (source builds only)
 resource "null_resource" "build_image" {
+  count = var.build_from_source ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = var.image_tag != ""
+      error_message = "image_tag must be set when build_from_source = true."
+    }
+  }
+
   triggers = {
     # Rebuild if the Dockerfile, Makefile, or image tag changes
     dockerfile_sha = filesha256("${path.module}/../Dockerfile")
@@ -82,23 +99,33 @@ resource "null_resource" "build_image" {
   }
 }
 
-# 3. Deploy the Helm chart, overriding the image registry
+# 3. Deploy the Helm chart. Default: the published OCI chart at a
+# pinned version, image untouched (digest-pinned by the chart).
+# Source builds: the local chart with the image overridden.
 resource "helm_release" "k8s_aibom" {
   name             = "k8s-aibom"
-  chart            = "${path.module}/../charts/k8s-aibom"
+  chart            = var.build_from_source ? "${path.module}/../charts/k8s-aibom" : "oci://ghcr.io/googlecloudplatform/charts/k8s-aibom"
+  version          = var.build_from_source ? null : var.chart_version
   namespace        = var.namespace
   create_namespace = true
 
-  set {
-    name  = "image.repository"
-    value = "${var.region}-docker.pkg.dev/${var.project_id}/${var.repository_id}/k8s-aibom"
+  dynamic "set" {
+    for_each = var.build_from_source ? [1] : []
+    content {
+      name  = "image.repository"
+      value = "${var.region}-docker.pkg.dev/${var.project_id}/${var.repository_id}/k8s-aibom"
+    }
   }
 
-  set {
-    name  = "image.tag"
-    value = var.image_tag
+  dynamic "set" {
+    for_each = var.build_from_source ? [1] : []
+    content {
+      name  = "image.tag"
+      value = var.image_tag
+    }
   }
 
   # Ensure the image is built and pushed before Helm tries to pull it
+  # (empty when build_from_source = false).
   depends_on = [null_resource.build_image]
 }
