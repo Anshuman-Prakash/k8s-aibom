@@ -71,6 +71,12 @@ commit:
 
 ## Plugin distribution (after publishing)
 
+0. Bump every installable version reference to the new tag —
+   `grep -rn 'version 1\.' README.md docs/install-eks-aks.md
+   docs/deck/index.html terraform/variables.tf` — install commands,
+   install.yaml URL, terraform chart_version default, deck install
+   slide + title kicker. Historical "since vX.Y" feature attributions
+   stay as-is.
 0. The plugin is live on krew-index (`kubectl krew install aibom`,
    since 2026-09-25); each release updates the existing
    `plugins/aibom.yaml` there rather than adding a new file.
