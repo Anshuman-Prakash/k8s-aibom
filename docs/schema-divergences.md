@@ -9,8 +9,66 @@ and CycloneDX maintainers can audit them.
 
 ## Status
 
-Phase 1 scaffold placeholder. Concrete divergence entries land as the scraper
-and BOM-builder implementations progress.
+Active register, seeded 2026-09-28 from the shipped v1.5.x output.
+Entries below cover the divergence *families* the emitter actually
+produces; per-field additions land as consumers raise them. This
+register is the companion to any schema conversation with CycloneDX
+upstream (see the 2.0 RFC comments on CycloneDX/specification#990).
+
+## D-002: `aibom.*` evidence and confidence properties
+
+**Status:** active
+**What we do:** every attribute-bearing component carries
+`aibom.confidence` (declared | inferred | unresolved | verified),
+`aibom.evidence.locator` (the exact spec field the fact came from,
+e.g. `spec.template.spec.containers[0].args[1]`) and
+`aibom.evidence.source`, plus workload identity properties
+(`aibom.workload.*`) and controller provenance
+(`aibom.controller.*`).
+**What the spec says:** CycloneDX 1.6 has `components[].evidence`
+with identity confidence for *software* components, but its
+methods vocabulary has no runtime-observation or
+signature-verification technique, and model components (ML-BOM)
+have no evidence surface at all.
+**Why we diverge:** auditors need per-attribute confidence and a
+pointer to the exact source; properties are the sanctioned
+extension mechanism. Proposed upstream: a `signature-verification`
+identification technique (spec#990 comment) and official
+`ai:runtime:*` names (property-taxonomy#175).
+
+## D-003: `signature.*` verification facts
+
+**Status:** active
+**What we do:** model components carry `signature.status`
+(unsigned | claimed | verified), `signature.outcome` (including
+`signature-valid-unconstrained`), `signature.reason`,
+`signature.identity`, `signature.rekorEntry`,
+`signature.subjectNameMismatch`.
+**What the spec says:** 1.6 has no representation for "a runtime
+verifier checked this model's signature against an operator trust
+root"; `attestation` semantics cover party assertions, not direct
+verification.
+**Why we diverge:** the verified tier is meaningless without its
+facts being inspectable; collapsing "valid signature, unconstrained
+signer" into "verified" would launder identity (Design 002 §5).
+
+## D-004: `aibom.redaction.applied`
+
+**Status:** active
+**What we do:** when the output sanitization pass redacts credential
+material, the document says so — a fact, never a silent omission.
+**Why we diverge:** an auditor must be able to distinguish "value
+absent" from "value removed"; the spec has no redaction marker.
+
+## D-005: `image.reference` / `image.tag` container properties
+
+**Status:** active
+**What we do:** container components carry the observed reference
+and tag as properties alongside the digest in `hashes[]`.
+**Why we diverge:** the digest is the identity; the mutable
+reference is evidence context. purl emission (`pkg:oci`) is planned
+(roadmap, v1.7 candidates) and will supersede part of this entry —
+tracked here so the byte-determinism change ships changelog-led.
 
 ## Format for divergence entries
 

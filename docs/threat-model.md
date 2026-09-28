@@ -1,104 +1,142 @@
 # Threat model
 
-This document is the security analysis of the k8s-aibom controller. It
-identifies the assets, actors, attack surfaces, and mitigations relevant to
-operating the controller in a regulated production environment. It is a
-living document; it will be filled in fully as the implementation lands and
-in coordination with PRD §16 (Risks and Mitigations).
+This is the security analysis of the k8s-aibom controller: assets,
+actors, trust boundaries, attack scenarios, and the mitigations that
+actually exist in the shipped code. Findings discovered against this
+model are recorded in §7 with their fixes — defects are part of the
+record here, not a separate story.
 
-## Status
-
-Phase 1 scaffold placeholder. Skeleton headings below indicate the structure
-the finished document will follow.
+Scope note: the controller is detection-only and unprivileged by
+design (no DaemonSets, no privileged containers, no kernel access, no
+admission webhooks on workloads, no pod mutation). Its entire write
+surface inside the cluster is the AIBOM custom resource; its entire
+read surface is the Kubernetes API.
 
 ## 1. Assets
 
-The things this controller is responsible for protecting or producing.
-
-- **Generated AI-BOM documents.** These are audit evidence used for EU AI Act
-  Article 11 documentation, NIST AI RMF profile evidence, ISO 42001 audits,
-  and internal incident response. Integrity and completeness matter more than
-  confidentiality (the BOM describes the workload, not its data).
-- **Sink credentials.** GCS Workload Identity binding, webhook bearer tokens,
-  future GUAC auth material. Loaded from Kubernetes Secrets in
-  `k8s-aibom-system`.
-- **External sink targets.** GCS buckets, webhook endpoints, GUAC ingestion
-  endpoints. The controller is the sole writer to these (PRD FR4.4).
+- **A1 — The BOM as audit evidence.** The CycloneDX document and the
+  AIBOM CR summary are consumed as compliance evidence. Their value is
+  integrity: a wrong fact stamped with a confidence tier is worse than
+  an absent fact. Everything else here defends A1.
+- **A2 — Sink credentials.** The GCS service-account binding and any
+  webhook bearer token / mTLS material referenced from
+  AIBOMControllerConfig Secrets.
+- **A3 — The archive.** Objects written to external sinks, relied on
+  for retrospective questions after workloads are gone.
+- **A4 — Trust roots.** The Sigstore trust material (public-good TUF,
+  TUF mirror, or static bundle) that the `verified` tier depends on.
+- **A5 — The controller's read position.** Cluster-wide informer
+  caches (all workload specs) and its network egress position.
 
 ## 2. Actors
 
-- **Cluster administrator (trusted).** Installs the controller, configures
-  sinks, opts in namespaces. Trusted with full cluster scope.
-- **Namespace owner (trusted within own namespace).** Owns workloads tracked
-  by the controller. Cannot tamper with the controller's BOMs (by design).
-- **Compromised inference workload (untrusted).** A pod that has been taken
-  over by an attacker (e.g., supply-chain compromise of the model server
-  image). The threat model must bound the blast radius of such a workload.
-- **External attacker (untrusted).** Pre-authentication adversary attempting
-  to reach the controller from the network, the registry, or via crafted
-  CRDs.
+- **T1 — Namespace tenant** (untrusted): can create workloads and pods
+  in namespaces they control, author annotations, and reference
+  attacker-controlled URLs in signature claims. The primary adversary.
+- **T2 — Cluster operator** (trusted): installs the chart, labels
+  namespaces, authors AIBOMControllerConfig, owns trust roots.
+- **T3 — Sink operator / receiver** (semi-trusted): controls the far
+  end of BOM delivery; may be a third party (Dependency-Track, SIEM).
+- **T4 — External signature host** (untrusted): serves the bundles
+  that workload annotations reference.
+- **T5 — Registry operators** (semi-trusted): control image content
+  behind references; the controller never pulls images, only records
+  references and kubelet-reported digests.
 
-## 3. Trust boundaries
+## 3. Trust boundaries and surfaces
 
-The boundaries across which authority changes, and what crosses each one.
-
-- **Cluster API server <-> Controller.** The controller authenticates as a
-  ServiceAccount with the RBAC defined in PRD §FR7. RBAC is least-privilege:
-  read on workload kinds + Namespaces, write on AIBOM only.
-- **Controller <-> External sinks.** Controller authenticates as a single
-  identity (KSA bound to a GSA for GCS, bearer tokens from Secrets for
-  webhook / GUAC). No other principal in the cluster has write access to the
-  sink targets.
-- **Controller <-> Workload pods.** No direct connection. The controller
-  reads pod *spec* and *status* via the API server. The controller never
-  executes into pods.
+- **B1 — Workload spec and annotations (T1 → controller).** All spec
+  content is untrusted input: names, args, env values, annotation
+  claims. Mitigations: conservative detection (registry-anchored
+  allowlist; ambiguous stays `unresolved`); declared values recorded
+  as *claims* with evidence locators, never as verified facts; length
+  truncation on extracted names; the output sanitization pass
+  (`aibom.redaction.applied` is recorded, never silent).
+- **B2 — Pod status → digest attribution (T1 → A1).** Digests enter a
+  BOM only from pods tied to the workload through the controller
+  ownerReference chain, with an image-name match on the candidate's
+  container status; pods with no controller owner never contribute
+  (see F1, fixed v1.5.1).
+- **B3 — Signature-reference fetch (T1/T4 → A5).** Tenant-authored
+  URLs fetched from the controller's network position. Bounds
+  (verifier/fetch.go): https-only, 1 MiB cap, same-host redirects, no
+  credentials attached, per-claim timeout, TTL'd cache. **Named
+  residual:** no private-IP dial guard — a fetch can target internal
+  HTTPS endpoints, and the recorded outcome is an existence/latency
+  oracle readable by the tenant. Verification is off by default;
+  the webhook sink's private-IP guard is in-tree precedent and the
+  planned closure (#96-adjacent hardening, v1.6 candidate).
+- **B4 — Sink egress (controller → T3).** Credentials never travel
+  over cleartext: http + auth is rejected at config load (F2, fixed
+  v1.5.1). The webhook sink refuses private-IP destinations by
+  default (SSRF guard). GCS objects are written with a DoesNotExist
+  precondition: write-once, never overwrite.
+- **B5 — Configuration (T2 → controller).** AIBOMControllerConfig is
+  validated all-or-nothing at load: any semantic error falls back to
+  compiled defaults with Ready=False naming every error. Secrets are
+  read only from the controller's own namespace.
+- **B6 — RBAC posture.** Read-only get/list/watch on workloads, pods,
+  replicasets, namespaces; write only on AIBOM CRs; optional
+  Secret access is chart-gated (`rbac.sinkSecretAccess`).
 
 ## 4. Attack scenarios
 
-Placeholder list. Each scenario needs a full STRIDE-style write-up before
-v1.0 ships, covering vector, impact, current mitigation, and residual risk.
-
-- **AS-1: Compromised inference workload tampers with its own BOM.** The
-  workload is the *subject* of the BOM, not the *writer*. RBAC denies pod
-  ServiceAccounts any write permission on `AIBOM` resources or on the GCS
-  bucket. Mitigation lives in PRD FR4.4 (sole-writer model).
-- **AS-2: Compromised inference workload tampers with another workload's
-  BOM.** Same mitigation as AS-1.
-- **AS-3: CRD-injection attack via malicious AIBOMControllerConfig.** A
-  cluster admin with cluster-config write access is already trusted; mitigation
-  is to restrict who can write `AIBOMControllerConfig` via RBAC, treat the
-  resource as security-sensitive.
-- **AS-4: Sink credential exfiltration via reading the Secret.** The bearer
-  token Secret for webhook and GUAC sinks lives in `k8s-aibom-system`. RBAC
-  on that namespace must restrict read access to the controller's KSA and
-  cluster admins only. Document this in the install guide.
-- **AS-5: Denial-of-BOM-service via spec-spam.** A workload owner rapidly
-  toggles labels or env vars to force regeneration. Mitigation: input-hash
-  short-circuit (PRD FR3.5) and rate-limited reconciliation queues.
-- **AS-6: BOM-poisoning via crafted env vars.** A workload owner sets
-  `HF_MODEL_ID` to a long or malformed value to inflate BOM size or trigger
-  parser issues. Mitigation: bounded-size string handling in the scraper,
-  strict input validation, BOM size threshold.
-- **AS-7: Sink endpoint hijack.** The configured webhook or GUAC endpoint is
-  changed by an attacker who has compromised the `AIBOMControllerConfig`.
-  Mitigation: treat `AIBOMControllerConfig` writes as audit-worthy events;
-  GCS Workload Identity binding can't be redirected without IAM changes.
+- **S1 — Digest planting (T1 → A1).** Create a pod matching another
+  workload's selector with a chosen imageID. Pre-v1.5.1 this landed
+  the attacker's digest in the victim's BOM as `pod_status` evidence.
+  Closed by ownership-chain attribution (F1). Residual: a tenant who
+  can modify the *workload itself* controls its BOM content — that is
+  the design (the BOM records what the workload declares and runs),
+  not a bypass.
+- **S2 — Credential capture on the wire (T1 on-path / network).**
+  Bearer token over http. Closed at config load (F2).
+- **S3 — Identity laundering via signature claims (T1).** A valid
+  signature from the wrong signer must not upgrade confidence:
+  `verified` requires an operator-configured signer-identity
+  constraint; under a public root with no constraint the outcome is
+  recorded as a fact (`signature-valid-unconstrained`) and the tier
+  stays `claimed`. Subject names are never sufficient and never
+  override digests (Design 002 §5).
+- **S4 — Oracle probing via the verifier fetch (T1 → A5).** See B3
+  residual.
+- **S5 — Archive gapping (availability of A3).** A transiently
+  failing sink previously dropped the BOM from the archive until the
+  workload spec changed (F3, fixed post-v1.5.1 on main). Remaining
+  operational caveat: custom GCS path templates without a uniqueness
+  token surface retry collisions as visible errors rather than
+  silent gaps.
+- **S6 — Resource exhaustion via authored specs (T1).** Extracted
+  names are truncated; container-component name/version caps and a
+  component-count cap are tracked as F4 (v1.6). Inline size is
+  bounded by `inlineThresholdBytes` (etcd protection).
 
 ## 5. The runtime model-fetch bypass
 
-A workload owner can write user code that fetches a model from an arbitrary
-URL at runtime (e.g., `wget` from inside the container at startup). The BOM
-will not capture this fetch, because the BOM is spec-driven and the URL is
-not in the spec. This is an acknowledged limit (PRD NG8). It is not a defect
-of the controller — it is the boundary of spec-driven scraping. v2 eBPF
-scraping closes this gap. The threat model documents it explicitly so that
-auditors are not misled.
+The controller records what the API server shows. A workload that
+downloads different weights at runtime than its spec declares defeats
+spec-level inventory by construction. This is out of scope for the
+controller and in scope for the `verified` tier: a cryptographically
+verified model signature binds identity to content, which is the only
+spec-level defense against this class. Fidelity beyond the API server
+(in-container load events, egress capture) is permanently out of
+scope for this controller (see roadmap "Out of scope — permanently").
 
 ## 6. Out of scope
 
-- Vulnerability scanning of model artifacts (separate concern; existing tools
-  cover container side).
-- Admission control / enforcement (PRD NG1).
-- Runtime threat detection (PRD NG6).
-- Defending against malicious cluster admins (they have cluster scope by
-  definition).
+- Kernel-level or in-container observation (permanent posture).
+- Verdicts, scoring, admission control (facts-not-judgments).
+- Defending against a malicious cluster operator (T2 is trusted; a
+  hostile cluster admin owns the API server and everything above).
+- Package-level image scanning (registry scanners own it; the BOM's
+  digests are the join key).
+
+## 7. Findings record
+
+| ID | Finding | Status |
+|---|---|---|
+| F1 | Selector-based pod attribution allowed digest cross-contamination and planting (#97) | Fixed v1.5.1 |
+| F2 | Bearer tokens accepted over cleartext http (#98) | Fixed v1.5.1 |
+| F3 | Transient sink failures were never retried; archive gapped silently (#91) | Fixed on main; ships v1.6 |
+| F4 | Container-component name/version and component count unbounded (tenant-controlled document growth) | Open; v1.6 |
+| F5 | Verifier fetch lacks a private-IP dial guard (internal-endpoint oracle; off-by-default feature) | Open; doc'd here; guard is a v1.6 candidate |
+| F6 | Bearer auth has no CA option, forcing public-CA https (#96) | Open; v1.6 candidate |

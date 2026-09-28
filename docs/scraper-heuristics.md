@@ -222,8 +222,8 @@ auditor-facing output makes speculative pattern broadening dangerous.
 
 | Case | Behavior | Why deferred |
 |---|---|---|
-| **TGI in GHCR registry form.** `ghcr.io/huggingface/text-generation-inference:*` | Runtime stays `ConfidenceUnresolved`. The existing TGI pattern is anchored to the Docker Hub form (`^huggingface/text-generation-inference.*`) | Fix is registry-prefix work; deferred per conservative-detection until real customer signal identifies the deployed registry pattern set. |
-| **TGI / TEI registry asymmetry.** TGI pattern targets Docker Hub form; TEI pattern targets GHCR form. | Customer running both via the same registry will get one detected, not the other. | Same root cause as the row above. Single-decision fix when registry-prefix expansion is approached. |
+| ~~**TGI in GHCR registry form.**~~ | **RESOLVED in v1.4.0** — real deployment signal arrived and `^ghcr\.io/huggingface/text-generation-inference.*` shipped (the publisher's own namespace, not a mirror pattern). Kept here as the worked example of the fix process below. | — |
+| ~~**TGI / TEI registry asymmetry.**~~ | **RESOLVED in v1.4.0** by the row above — both now cover the publisher's GHCR namespace. | — |
 | **Image mirrors with embedded vendor names.** `<some-private-mirror>/<some-namespace>/vllm-toolkit:tag` or similar | No match (current `^vllm/.*` requires the image to START with `vllm/`) | Anchored matching deliberately rejects mirrored / repackaged images. Broadening risks false positives (e.g., `customer-mirror/not-vllm/vllm-toolkit:tag` contains "vllm" but isn't vLLM). Deferred pending mirroring-pattern survey. |
 | **TensorRT-LLM standalone images.** | Production-shipping form `nvcr.io/nvidia/tritonserver:*-trtllm-*` is covered by the Triton pattern. A separate TensorRT-LLM pattern is NOT added. | Adding TensorRT-LLM separately would double-count the same workload. If a future shipping form is genuinely distinct, add it then. |
 
