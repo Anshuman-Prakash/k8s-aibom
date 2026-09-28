@@ -8,6 +8,14 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ### Fixed
 
+- **Tenant-controlled document growth is bounded.** Container
+  component name/version are truncated on the same rule as every
+  other authored string, and a per-document component cap (256)
+  bounds pathological specs in memory and on the wire, not only in
+  etcd. Truncation is recorded as `aibom.truncation.applied` —
+  mirroring the redaction rule, never silent. Untruncated documents
+  are byte-identical to before.
+
 - **Transient sink failures now retry until the archive heals**
   (#91). Previously the BOM input hash was persisted even when a
   configured external sink failed, so the next reconcile took the
