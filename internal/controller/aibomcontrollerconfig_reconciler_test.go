@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -477,15 +478,24 @@ func (*transientError) Error() string { return "transient: api server unreachabl
 // unrelated KServe/Deployment etc. setup.
 func startConfigEnvTest(t *testing.T) (*envTestEnv, *AIBOMControllerConfigReconciler, *captureRecorder) {
 	t.Helper()
+	return startConfigEnvTestWithCRDs(t, []string{filepath.Join("..", "..", "config", "crd", "bases")})
+}
+
+// startConfigEnvTestWithCRDs is startConfigEnvTest with a caller-chosen
+// CRD directory, so a test can install an OLDER schema than the
+// controller was built with (the schema-skew scenario, #104). The
+// reconciler is wired with the real OpenAPISchemaChecker against the
+// envtest API server in both cases, so every valid-CR test also
+// asserts the no-false-positive path.
+func startConfigEnvTestWithCRDs(t *testing.T, crdDirs []string) (*envTestEnv, *AIBOMControllerConfigReconciler, *captureRecorder) {
+	t.Helper()
 
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(aibomv1beta1.AddToScheme(scheme))
 
 	te := &envtest.Environment{
-		CRDDirectoryPaths: []string{
-			filepath.Join("..", "..", "config", "crd", "bases"),
-		},
+		CRDDirectoryPaths:     crdDirs,
 		ErrorIfCRDPathMissing: true,
 	}
 	cfg, err := te.Start()
@@ -508,6 +518,10 @@ func startConfigEnvTest(t *testing.T) (*envTestEnv, *AIBOMControllerConfigReconc
 		t.Fatalf("NewManager: %v", err)
 	}
 
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
+	if err != nil {
+		t.Fatalf("discovery client: %v", err)
+	}
 	rec := &captureRecorder{}
 	r := &AIBOMControllerConfigReconciler{
 		Client: mgr.GetClient(),
@@ -516,8 +530,9 @@ func startConfigEnvTest(t *testing.T) (*envTestEnv, *AIBOMControllerConfigReconc
 			SinkFactory: config.NoopSinkFactory{},
 			ConfigName:  config.DefaultConfigName,
 		},
-		ConfigStore: config.NewStore(config.DefaultSnapshot()),
-		Recorder:    rec,
+		ConfigStore:   config.NewStore(config.DefaultSnapshot()),
+		Recorder:      rec,
+		SchemaChecker: NewOpenAPISchemaChecker(discoveryClient.OpenAPIV3()),
 		ControllerPod: &corev1.ObjectReference{
 			APIVersion: "v1", Kind: "Pod",
 			Name: "aibom-controller-test", Namespace: "k8s-aibom-system",

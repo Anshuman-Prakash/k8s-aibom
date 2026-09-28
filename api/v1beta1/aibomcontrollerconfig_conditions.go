@@ -81,4 +81,11 @@ const (
 	// controller fell back to the previous successfully-loaded
 	// snapshot after a subsequent invalid update.
 	ReasonRunningOnLastKnownGood = "RunningOnLastKnownGood"
+
+	// ReasonSchemaPredatesController is set on Degraded=True when the
+	// API server's served AIBOMControllerConfig schema lacks spec
+	// fields this controller was built with. Stored values for those
+	// fields were pruned; their features are OFF until the CRDs are
+	// updated (#104).
+	ReasonSchemaPredatesController = "SchemaPredatesController"
 )

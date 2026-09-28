@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -114,6 +115,16 @@ const (
 	// invalid back to valid. Clears the Degraded condition.
 	// Targeted at the CR.
 	EventReasonConfigRecovered = "ConfigRecovered"
+
+	// EventReasonSchemaPredatesController fires (Warning) when the
+	// served CRD schema is found to lack compiled-in spec fields, and
+	// again whenever the set of missing fields changes. Same-set
+	// repeats emit nothing.
+	EventReasonSchemaPredatesController = "SchemaPredatesController"
+
+	// EventReasonSchemaCurrent fires (Normal) once when a previously
+	// reported schema skew clears.
+	EventReasonSchemaCurrent = "SchemaCurrent"
 )
 
 // snapshotLoader is the loader contract consumed by
@@ -180,6 +191,16 @@ type AIBOMControllerConfigReconciler struct {
 	// determinism; production always uses the default.
 	ConfigName string
 
+	// SchemaChecker detects served-CRD-schema skew (see schema_skew.go).
+	// nil disables the check (tests that exercise only the state
+	// machine). Production wires an OpenAPISchemaChecker.
+	SchemaChecker SchemaChecker
+
+	// lastSkew is the previously reported skew key (joined missing
+	// fields), used to emit the schema Warning once per distinct set
+	// rather than on every reconcile.
+	lastSkew string
+
 	// lastObserved is the state machine's previous observation, used
 	// to suppress duplicate events when the CR remains in the same
 	// state across multiple reconciles. See the package-level note on
@@ -204,6 +225,7 @@ type AIBOMControllerConfigReconciler struct {
 // +kubebuilder:rbac:groups=aibom.k8saibom.dev,resources=aibomcontrollerconfigs,verbs=get;list;watch
 // +kubebuilder:rbac:groups=aibom.k8saibom.dev,resources=aibomcontrollerconfigs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:urls=/openapi/v3;/openapi/v3/*,verbs=get
 func (r *AIBOMControllerConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// Finite reconcile deadline — see DefaultReconcileTimeout.
 	ctx, cancel := context.WithTimeout(ctx, DefaultReconcileTimeout)
@@ -231,6 +253,11 @@ func (r *AIBOMControllerConfigReconciler) Reconcile(ctx context.Context, req ctr
 	// not" boolean directly, but the error count + Source combination
 	// is sufficient.
 	newState := classify(result)
+
+	// Served-schema skew is orthogonal to spec validity: a pruned field
+	// loads as "unset" and the spec parses cleanly. Detect it here so
+	// both the Event and the condition see the same answer.
+	skew := r.detectSchemaSkew(ctx)
 
 	// Read the CURRENT stored snapshot to decide whether an invalid
 	// result should preserve a last-known-good. The Source field on
@@ -289,10 +316,13 @@ func (r *AIBOMControllerConfigReconciler) Reconcile(ctx context.Context, req ctr
 	// fires once is more valuable than a status update that may
 	// conflict and retry.
 	r.emitTransitionEvent(ctx, r.lastObserved, newState, toStore)
+	if newState != stateMissing {
+		r.emitSchemaSkewEvent(configName, skew)
+	}
 
 	// Update CR status — only when the CR exists.
 	if newState != stateMissing {
-		if err := r.updateConditions(ctx, configName, newState, result, toStore); err != nil {
+		if err := r.updateConditions(ctx, configName, newState, result, toStore, skew); err != nil {
 			// Status conflict means another writer raced us; the
 			// next reconcile will reapply. Don't fail the reconcile
 			// for a status conflict — the snapshot is already stored
@@ -311,6 +341,47 @@ func (r *AIBOMControllerConfigReconciler) Reconcile(ctx context.Context, req ctr
 
 	r.lastObserved = newState
 	return ctrl.Result{}, nil
+}
+
+// detectSchemaSkew runs the SchemaChecker, degrading to "no skew
+// determinable" on any error: the check must never fail a reconcile,
+// and an unreachable OpenAPI endpoint is logged, not treated as skew.
+func (r *AIBOMControllerConfigReconciler) detectSchemaSkew(ctx context.Context) []string {
+	if r.SchemaChecker == nil {
+		return nil
+	}
+	logger := log.FromContext(ctx)
+	missing, err := r.SchemaChecker.MissingSpecFields(ctx)
+	if err != nil {
+		logger.V(1).Info("served CRD schema check skipped", "err", err.Error())
+		return nil
+	}
+	if len(missing) > 0 {
+		logger.Info("served CRD schema predates this controller; features for pruned spec fields are disabled",
+			"missingSpecFields", strings.Join(missing, ","))
+	}
+	return missing
+}
+
+// emitSchemaSkewEvent fires the schema Warning once per distinct
+// missing-field set, and a Normal event once when skew clears.
+func (r *AIBOMControllerConfigReconciler) emitSchemaSkewEvent(configName string, skew []string) {
+	key := strings.Join(skew, ",")
+	if key == r.lastSkew {
+		return
+	}
+	ref := &corev1.ObjectReference{
+		APIVersion: aibomv1beta1.GroupVersion.String(),
+		Kind:       "AIBOMControllerConfig",
+		Name:       configName,
+	}
+	if key != "" {
+		r.Recorder.Event(ref, corev1.EventTypeWarning, EventReasonSchemaPredatesController, schemaSkewMessage(skew))
+	} else {
+		r.Recorder.Event(ref, corev1.EventTypeNormal, EventReasonSchemaCurrent,
+			"Served AIBOMControllerConfig CRD schema now declares every spec field this controller was built with.")
+	}
+	r.lastSkew = key
 }
 
 // classify decides which observedState the Loader's result represents.
@@ -417,6 +488,7 @@ func (r *AIBOMControllerConfigReconciler) updateConditions(
 	state observedState,
 	result config.LoadResult,
 	stored *config.Snapshot,
+	skew []string,
 ) error {
 	var cr aibomv1beta1.AIBOMControllerConfig
 	if err := r.Get(ctx, types.NamespacedName{Name: configName}, &cr); err != nil {
@@ -434,17 +506,32 @@ func (r *AIBOMControllerConfigReconciler) updateConditions(
 			Message:            "Configuration loaded successfully; runtime snapshot is in effect.",
 			LastTransitionTime: now,
 		})
-		// Explicitly clear Degraded by setting it to False — this
-		// makes the recovery path visible to customers reading
-		// kubectl describe.
-		meta.SetStatusCondition(&cr.Status.Conditions, metav1.Condition{
-			Type:               aibomv1beta1.AIBOMControllerConfigConditionDegraded,
-			Status:             metav1.ConditionFalse,
-			Reason:             aibomv1beta1.ReasonConfigLoaded,
-			ObservedGeneration: cr.Generation,
-			Message:            "Controller is running on the current spec snapshot.",
-			LastTransitionTime: now,
-		})
+		if len(skew) > 0 {
+			// The spec parsed cleanly, but the server discarded fields
+			// this controller depends on. Ready stays True (the load
+			// succeeded); Degraded says why the status must not be
+			// read as green.
+			meta.SetStatusCondition(&cr.Status.Conditions, metav1.Condition{
+				Type:               aibomv1beta1.AIBOMControllerConfigConditionDegraded,
+				Status:             metav1.ConditionTrue,
+				Reason:             aibomv1beta1.ReasonSchemaPredatesController,
+				ObservedGeneration: cr.Generation,
+				Message:            schemaSkewMessage(skew),
+				LastTransitionTime: now,
+			})
+		} else {
+			// Explicitly clear Degraded by setting it to False — this
+			// makes the recovery path visible to customers reading
+			// kubectl describe.
+			meta.SetStatusCondition(&cr.Status.Conditions, metav1.Condition{
+				Type:               aibomv1beta1.AIBOMControllerConfigConditionDegraded,
+				Status:             metav1.ConditionFalse,
+				Reason:             aibomv1beta1.ReasonConfigLoaded,
+				ObservedGeneration: cr.Generation,
+				Message:            "Controller is running on the current spec snapshot.",
+				LastTransitionTime: now,
+			})
+		}
 		if stored != nil {
 			loadedAt := metav1.NewTime(stored.LoadedAt)
 			cr.Status.LastLoadedAt = &loadedAt

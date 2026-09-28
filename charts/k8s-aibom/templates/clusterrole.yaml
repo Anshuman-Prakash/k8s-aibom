@@ -55,3 +55,9 @@ rules:
 - apiGroups: [""]
   resources: ["events"]
   verbs: ["create", "patch"]
+# Served-schema skew detection (#104): read the OpenAPI v3 document to
+# compare the installed CRD schema against the controller's compiled-in
+# spec. system:discovery already grants this to every authenticated
+# ServiceAccount; stated explicitly so the dependency is auditable.
+- nonResourceURLs: ["/openapi/v3", "/openapi/v3/*"]
+  verbs: ["get"]
