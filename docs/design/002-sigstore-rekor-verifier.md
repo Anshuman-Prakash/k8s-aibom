@@ -236,6 +236,15 @@ downstream; verification must not move it in the steady state.
   2026-09-08: this bullet previously relied on subject-name matching;
   external review showed the name is informative in the format and
   the original claim was false under default configuration.)*
+- **Named residual (amended 2026-09-28):** the fetch originates from
+  the controller's network position, and https-only does not exclude
+  internal endpoints — a tenant-authored reference can probe internal
+  HTTPS services, and the recorded outcome is an existence/latency
+  oracle readable by that tenant. Bounded (size, timeout, no
+  credentials, same-host redirects) but real. Verification is off by
+  default; the planned closure is a private-IP dial guard mirroring
+  the webhook sink's (threat model F5, v1.6 candidate), with an
+  optional host allowlist remaining demand-gated.
 - Trust-root updates: TUF refresh failures fall back to the last
   cached root (logged); the embedded public root bounds cold-start.
 

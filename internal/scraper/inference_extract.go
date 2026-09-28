@@ -223,8 +223,8 @@ func (s *InferenceSpecScraper) extractContainerComponent(c corev1.Container, ini
 
 	comp := Component{
 		Type:    ComponentContainer,
-		Name:    name,
-		Version: tag,
+		Name:    TruncateString(name, MaxComponentNameLength),
+		Version: TruncateString(tag, MaxComponentNameLength),
 		Evidence: Evidence{
 			Source:  SourceImageReference,
 			Locator: digestLocator,
@@ -451,6 +451,14 @@ func lookupVolumeSource(volumeName string, volumes []corev1.Volume) (name, kind 
 // Package-level helper so both InferenceSpecScraper and
 // KServeInferenceServiceScraper can use it.
 const MaxComponentNameLength = 1024
+
+// MaxComponentsPerDocument caps the number of components a single
+// workload can put into its BOM. A tenant authoring a pathological
+// spec (hundreds of containers/env claims) bounds document growth in
+// memory and on the wire, not only in etcd. Truncation is recorded
+// (aibom.truncation.applied), never silent — mirroring the redaction
+// rule. 256 is far above any legitimate workload observed.
+const MaxComponentsPerDocument = 256
 
 // TruncateString safely truncates a UTF-8 string to maxLen runes,
 // appending an ellipsis if truncated, ensuring the total length does not exceed maxLen.

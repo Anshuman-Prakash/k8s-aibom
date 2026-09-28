@@ -241,6 +241,10 @@ type BOMInputs struct {
 	Provenance []Provenance     `json:"provenance,omitempty"`
 	Errors     []error          `json:"-"`
 	Category   WorkloadCategory `json:"category,omitempty"`
+	// TruncatedComponents counts components dropped by the per-document
+	// cap (MaxComponentsPerDocument). Zero on untruncated documents —
+	// omitempty keeps the input hash byte-identical for the clean case.
+	TruncatedComponents int `json:"truncatedComponents,omitempty"`
 }
 
 // Deduplicate removes duplicate components and services from the inputs,

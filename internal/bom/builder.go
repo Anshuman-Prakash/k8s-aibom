@@ -165,6 +165,14 @@ func buildMetadataProperties(inputs *scraper.BOMInputs, opts BuildOptions) *[]cd
 		{Name: "aibom.controller.name", Value: opts.ControllerName},
 		{Name: "aibom.controller.version", Value: opts.ControllerVersion},
 	}
+	if inputs.TruncatedComponents > 0 {
+		// Mirror of aibom.redaction.applied: a consumer must be able
+		// to distinguish "complete document" from "capped document".
+		props = append(props, cdx.Property{
+			Name:  "aibom.truncation.applied",
+			Value: fmt.Sprintf("components-dropped:%d", inputs.TruncatedComponents),
+		})
+	}
 	// One property block per Provenance entry. Index suffix keeps names
 	// unique under sort-by-name consumers.
 	for i, p := range inputs.Provenance {

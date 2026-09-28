@@ -19,6 +19,8 @@ package scraper
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -319,4 +321,68 @@ func findRuntimeApp(t *testing.T, cs []Component) *Component {
 	}
 	t.Fatal("missing runtime application component")
 	return nil
+}
+
+// G0.3 regression: tenant-controlled document growth is bounded.
+func TestScrape_ComponentCapIsAppliedAndRecorded(t *testing.T) {
+	s := NewInferenceSpecScraper(nil)
+	// A pathological Deployment: one vllm container (real signal) plus
+	// hundreds of model-claim env vars.
+	env := []corev1.EnvVar{}
+	for i := 0; i < MaxComponentsPerDocument+100; i++ {
+		env = append(env, corev1.EnvVar{Name: "MODEL_NAME", Value: fmt.Sprintf("m-%04d", i)})
+	}
+	// MODEL_NAME appears once per container in a real spec; spread the
+	// claims across many containers to build a legitimate-shaped but
+	// enormous component list.
+	containers := []corev1.Container{}
+	for i := 0; i < MaxComponentsPerDocument+100; i++ {
+		containers = append(containers, corev1.Container{
+			Name:  fmt.Sprintf("c%04d", i),
+			Image: "vllm/vllm-openai:v0.6.3",
+			Env:   []corev1.EnvVar{{Name: "MODEL_NAME", Value: fmt.Sprintf("m-%04d", i)}},
+		})
+	}
+	_ = env
+	dep := &appsv1.Deployment{
+		Spec: appsv1.DeploymentSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{Containers: containers},
+			},
+		},
+	}
+	w := Workload{Kind: WorkloadKind{Group: "apps", Version: "v1", Kind: "Deployment"}, Name: "huge", Namespace: "ns", Object: dep}
+	inputs, err := s.Scrape(context.Background(), w, testConfig())
+	if err != nil {
+		t.Fatalf("scrape: %v", err)
+	}
+	if len(inputs.Components) != MaxComponentsPerDocument {
+		t.Fatalf("components = %d, want capped at %d", len(inputs.Components), MaxComponentsPerDocument)
+	}
+	if inputs.TruncatedComponents == 0 {
+		t.Fatalf("TruncatedComponents = 0; truncation must be recorded, never silent")
+	}
+	// Determinism: capping twice yields the identical surviving set.
+	inputs2, _ := s.Scrape(context.Background(), w, testConfig())
+	h1, _ := HashBOMInputs(inputs)
+	h2, _ := HashBOMInputs(inputs2)
+	if h1 != h2 {
+		t.Fatalf("capped scrape is nondeterministic: %s != %s", h1, h2)
+	}
+}
+
+// G0.3: container component Name/Version are truncated like every
+// other authored string.
+func TestExtractContainerComponent_NameAndVersionTruncated(t *testing.T) {
+	s := NewInferenceSpecScraper(nil)
+	longName := strings.Repeat("a", MaxComponentNameLength+50)
+	longTag := strings.Repeat("b", MaxComponentNameLength+50)
+	c := corev1.Container{Name: "x", Image: longName + ":" + longTag}
+	comps := s.extractContainerComponent(c, false, 0, nil, testConfig())
+	if len(comps) == 0 {
+		t.Fatal("no component extracted")
+	}
+	if len(comps[0].Name) > MaxComponentNameLength || len(comps[0].Version) > MaxComponentNameLength {
+		t.Fatalf("name/version not truncated: %d / %d", len(comps[0].Name), len(comps[0].Version))
+	}
 }

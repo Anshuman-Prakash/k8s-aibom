@@ -168,6 +168,14 @@ func (s *InferenceSpecScraper) Scrape(ctx context.Context, w Workload, cfg *Infe
 	// rely on map iteration order.
 	sortComponents(inputs.Components)
 
+	// Per-document component cap (deterministic: applied post-sort so
+	// the surviving set is stable across reconciles). Recorded, never
+	// silent — the builder emits aibom.truncation.applied.
+	if len(inputs.Components) > MaxComponentsPerDocument {
+		inputs.TruncatedComponents = len(inputs.Components) - MaxComponentsPerDocument
+		inputs.Components = inputs.Components[:MaxComponentsPerDocument]
+	}
+
 	// Workload-level confidence aggregation
 	inputs.Confidence = aggregateConfidence(inputs.Components)
 
