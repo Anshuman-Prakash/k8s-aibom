@@ -15,7 +15,7 @@ How the policy is verified:
 | envtest (API-server behavior) | k8s 1.34 on every PR; **1.27 / 1.31 / 1.34 weekly** (version-matrix workflow) |
 | kind e2e (build, deploy via chart, readiness) | default node image every PR; **floor (1.27) and latest node image weekly** (version-matrix workflow) |
 | Real-cluster verification | GKE, current stable channel, before every release tag |
-| Independent third-party | NVIDIA/AICR's ADR-019 qualification of v1.2.0 passed on Kind Kubernetes **1.35.0 and 1.36.1** ([record](https://github.com/GoogleCloudPlatform/k8s-aibom/issues/8)) |
+| Independent third-party | NVIDIA/AICR's ADR-019 qualification of v1.2.0 passed on Kind Kubernetes **1.35.0 and 1.36.1** ([record](https://github.com/GoogleCloudPlatform/k8s-aibom/issues/8)) | AICR subsequently requalified and re-pinned to **v1.3.0** (their #2309, with independent GKE measurements in NVIDIA/aicr#2310); requalification against **v1.5.1** is in progress (tracked on issue #8).
 
 ## Support policy
 

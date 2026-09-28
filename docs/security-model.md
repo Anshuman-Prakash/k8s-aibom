@@ -81,9 +81,13 @@ preference:
    **customer's responsibility**; the controller has no rotation
    support. Avoid this path in production.
 
-### Configuration via env vars (v1.0 interim)
+### Configuration (AIBOMControllerConfig CRD)
 
-The Phase 13 AIBOMControllerConfig CRD will replace this; for v1.0:
+Configuration is the AIBOMControllerConfig custom resource (shipped;
+the env-var interim described in early drafts was removed 2026-05-11).
+Semantic validation is all-or-nothing at load: any error falls back
+to compiled defaults with Ready=False naming every error. Historical
+v1.0 env vars, retained for archaeology only:
 
 | Env var | Required | Description |
 |---|---|---|
