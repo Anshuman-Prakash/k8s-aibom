@@ -6,6 +6,28 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Transient sink failures now retry until the archive heals**
+  (#91). Previously the BOM input hash was persisted even when a
+  configured external sink failed, so the next reconcile took the
+  dedup fast path and returned before re-emitting — a transient 403
+  or network blip dropped that BOM from the archive until the
+  workload spec changed. Now: the input hash is not persisted while
+  any sink is failing (dedup unaffected on success), the reconcile
+  requeues on a bounded cadence (1 minute) until delivery succeeds,
+  and the four status/comment texts that promised a retry that never
+  happened now describe the real behavior. After a partial failure,
+  sinks that already succeeded are re-emitted on the retry; the
+  default timestamped GCS path template makes that a duplicate
+  archive object, never an overwrite.
+- **The bootstrap-race deferral now requeues explicitly.** It
+  previously waited for a status-update watch event that the
+  Owns-watch's GenerationChangedPredicate filters out — an AIBOM
+  whose first status write raced the cache could sit unpopulated
+  until an unrelated event arrived, and the empty result could
+  collapse a concurrently scheduled sink retry.
+
 ## [1.5.1] - UNRELEASED (security PATCH)
 
 ### Fixed
@@ -27,15 +49,6 @@ All notable changes to k8s-aibom are documented here. The format follows
   a load-time validation error (all-or-nothing fallback, named
   LoadError). Plain http without auth remains legal for in-cluster
   receivers; https with auth is unchanged.
-
-### Added
-
-- Runtime detection for LiteLLM (`ghcr.io/berriai/litellm*`), the
-  widely deployed LLM gateway. Demand signal: the litellm 1.82.8
-  supply-chain incident (BerriAI/litellm#24512), where the first
-  incident-response question — "where is this running?" — requires
-  runtime attribution. A new docs page,
-  `docs/incident-response.md`, documents that workflow.
 
 ## [1.5.0] - 2026-09-22
 

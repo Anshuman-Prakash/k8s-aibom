@@ -64,6 +64,33 @@ func NewStatusBuilder() *StatusBuilder {
 // SinkResult records the outcome of writing the BOM to one external sink.
 // CRDStatus is NOT a sink for the purposes of SinkResult — the controller
 // always updates the CR's status as the integral terminal step.
+// SinkRetryRequeueAfter is the bounded retry cadence while any
+// configured external sink is failing. Chosen over event-driven
+// retry because a quiet workload may produce no further events, and
+// over controller-runtime error backoff because sink errors must not
+// look like reconcile errors in metrics.
+// Declared as a variable (not const) so the envtest suite can shrink
+// the cadence; production code never mutates it.
+var SinkRetryRequeueAfter = time.Minute
+
+// BootstrapRaceRequeueAfter is the short deferral used when an AIBOM
+// exists but its Status has not yet propagated through the cache (the
+// bootstrap race in reconcileWorkload). It must be an explicit requeue
+// because the Owns-watch filters status-update events. A variable so
+// the envtest suite can shrink it; production code never mutates it.
+var BootstrapRaceRequeueAfter = 2 * time.Second
+
+// anySinkFailed reports whether any configured external sink returned
+// an error this cycle.
+func anySinkFailed(results []SinkResult) bool {
+	for _, r := range results {
+		if r.Err != nil {
+			return true
+		}
+	}
+	return false
+}
+
 type SinkResult struct {
 	// Sink is the sink name (matches Sink.Name()), e.g., "gcs", "webhook".
 	Sink string
@@ -218,7 +245,7 @@ func (b *StatusBuilder) buildBOMDocumentRef(doc *bom.Document, sinkResults []Sin
 		)
 	} else {
 		ref.TruncationReason = fmt.Sprintf(
-			"BOM size %d bytes exceeds inline threshold %d bytes and no configured external sink succeeded this cycle (see the SinkFailed condition). The full BOM was not delivered and will be retried on the next reconcile.",
+			"BOM size %d bytes exceeds inline threshold %d bytes and no configured external sink succeeded this cycle (see the SinkFailed condition). The full BOM was not delivered; delivery is retried automatically on a bounded cadence while a sink is failing.",
 			size, inlineThresholdBytes,
 		)
 	}
