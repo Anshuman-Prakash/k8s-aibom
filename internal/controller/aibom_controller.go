@@ -39,8 +39,9 @@ import (
 // DefaultExternalSinkTimeout bounds each external Sink.Emit call so a
 // slow or hung sink cannot stall reconciliation. The deadline is per-
 // sink, not per-reconcile, so two sinks in parallel each get the full
-// budget. A failure here is recorded as a SinkFailed condition; the
-// next reconcile cycle retries.
+// budget. A failure here is recorded as a SinkFailed condition, the
+// input hash is withheld so dedup cannot swallow the re-emit, and the
+// reconcile requeues on SinkRetryRequeueAfter until delivery succeeds.
 const DefaultExternalSinkTimeout = 30 * time.Second
 
 // DefaultReconcileTimeout bounds a single workload or config reconcile,

@@ -105,8 +105,14 @@ func (c *GCSSinkConfig) Validate() error {
 //     auth tokens (the underlying library does not leak these in its
 //     error messages).
 //   - A failed Emit does not block the reconciler's CRD-status update;
-//     the controller treats it as a SinkFailed condition and the next
-//     reconcile retries.
+//     the controller records a SinkFailed condition and retries on a
+//     bounded requeue cadence until delivery succeeds. Retries after a
+//     partial failure may re-emit to sinks that already succeeded that
+//     cycle: with the default timestamped path template this writes a
+//     duplicate archive object, never an overwrite. Custom templates
+//     without a uniqueness token ({timestamp}/{hash}) will surface the
+//     DoesNotExist precondition error on such retries — visible in the
+//     SinkFailed condition rather than a silent gap.
 //
 // Retry and recovery semantics:
 //   - Each Emit is bounded by the per-sink context deadline set by the

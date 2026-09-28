@@ -283,12 +283,19 @@ func (r *WorkloadReconciler) reconcileWorkload(ctx context.Context, req Workload
 		// (e.g., via a future admission webhook), the webhook must initialize
 		// Status.LastReconciled to a non-nil sentinel value so they are not
 		// misidentified as a bootstrap race and deferred indefinitely.
+		// The deferral MUST carry its own requeue: the Owns-watch is
+		// predicated on GenerationChangedPredicate, so the Status
+		// Update event this branch previously waited for is filtered
+		// and never triggers a reconcile. An empty Result here also
+		// collapses any timer a concurrent reconcile scheduled (the
+		// workqueue keeps one entry per item) — which is exactly how
+		// a sink retry was being lost.
 		if existing.Status.LastReconciled == nil {
-			logger.V(1).Info("AIBOM Status not yet populated by prior reconcile, deferring to subsequent reconcile",
+			logger.V(1).Info("AIBOM Status not yet populated by prior reconcile, deferring briefly",
 				"workload_namespace", req.Workload.Namespace,
 				"workload_name", req.Workload.Name,
 			)
-			return ctrl.Result{}, nil
+			return ctrl.Result{RequeueAfter: BootstrapRaceRequeueAfter}, nil
 		}
 	}
 	if existingErr != nil && !apierrors.IsNotFound(existingErr) {
@@ -317,6 +324,21 @@ func (r *WorkloadReconciler) reconcileWorkload(ctx context.Context, req Workload
 	// inlineThresholdBytes in AIBOMControllerConfig and have it take
 	// effect on the next reconcile without restart.
 	status := r.StatusBuilder.BuildStatus(doc, req.SummaryOptions, sinkResults, req.Generation, inputHash, snap.InlineThreshold)
+
+	// Sink-retry contract: if any configured external sink failed this
+	// cycle, do NOT persist the input hash. A persisted hash would send
+	// the next reconcile down the dedup fast path, which returns before
+	// emitToExternalSinks — turning a transient sink blip into a BOM
+	// permanently missing from the archive until the workload spec
+	// changes. Blanking the hash keeps dedup intact on success and
+	// forces a full re-emit while any sink is failing. Sinks that DID
+	// succeed this cycle are re-emitted too on the retry; timestamped
+	// object paths make that safe (a duplicate archive copy, never an
+	// overwrite). Per-sink retry targeting is a deliberate follow-up.
+	sinkFailed := anySinkFailed(sinkResults)
+	if sinkFailed {
+		status.InputHash = ""
+	}
 
 	// Phase 14: extraction errors and Stale wiring
 	if len(inputs.Errors) > 0 {
@@ -397,6 +419,13 @@ func (r *WorkloadReconciler) reconcileWorkload(ctx context.Context, req Workload
 		r.recordStatusPersistFailure(aibom, req, err)
 		return ctrl.Result{}, fmt.Errorf("update AIBOM status: %w", err)
 	}
+	if sinkFailed {
+		// Deterministic self-heal: without this, a re-emit would wait
+		// for the next watch event, which for a quiet workload may
+		// never come. Bounded cadence; SinkFailed=True remains the
+		// operator-visible signal while retries continue.
+		return ctrl.Result{RequeueAfter: SinkRetryRequeueAfter}, nil
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -470,9 +499,10 @@ func (r *WorkloadReconciler) recordStatusPersistFailure(obj *aibomv1beta1.AIBOM,
 //
 // Per the "errors are safe to surface" contract: sinks' returned
 // errors are logged at info level and recorded in the SinkResult; the
-// reconciler does NOT propagate them as a Reconcile error (which would
-// trigger controller-runtime backoff and a re-reconcile). The next
-// natural reconcile cycle retries via the standard event-driven path.
+// reconciler does NOT propagate them as a Reconcile error. Retry is
+// handled explicitly by the caller: on any sink failure the input
+// hash is not persisted (so the dedup fast path cannot swallow the
+// re-emit) and the reconcile requeues after SinkRetryRequeueAfter.
 func (r *WorkloadReconciler) emitToExternalSinks(ctx context.Context, doc *bom.Document, w scraper.Workload, sinks []sink.Sink) []SinkResult {
 	if len(sinks) == 0 || doc == nil {
 		return nil
