@@ -19,8 +19,12 @@ docs re-baselined on dual-sampled live-GKE runs) — see the
 [CHANGELOG](../CHANGELOG.md) for details and the qualification record
 on [issue #8](https://github.com/GoogleCloudPlatform/k8s-aibom/issues/8).
 The weekly Kubernetes version matrix backing the compatibility range
-also shipped (with v1.3.0). **v1.5.0 — the trust release — shipped
-2026-09-22**: Sigstore/OMS signature verification (the `verified`
+also shipped (with v1.3.0). **v1.5.1 — security PATCH — shipped
+2026-09-28** (cut from `release/1.5`; source delta over v1.5.0 is
+exactly the two fixes: ownership-based pod attribution across all
+four workload kinds, and rejection of webhook credentials over
+cleartext — retrospectives in #97/#98). **v1.5.0 — the trust release
+— shipped 2026-09-22**: Sigstore/OMS signature verification (the `verified`
 tier, [Design 002](design/002-sigstore-rekor-verifier.md), two rounds
 of external review), the output sanitization guarantee, the
 `kubectl aibom` plugin, and the non-default-configuration e2e matrix.
@@ -36,9 +40,40 @@ of external review), the output sanitization guarantee, the
   `AIBOMControllerConfig` CR — with a short design note first: if the
   allowlist narrows what the informers watch (not only what is
   reported), it directly reduces the controller's read surface.
+- **Separate `k8s-aibom-crds` chart** (#77) — the CRD-lifecycle
+  packaging requested by an AICR operator; externally contributed.
+- **Sink reliability** (landed on main post-v1.5.0, ships in v1.6):
+  transiently failed sinks now retry until the archive heals, and the
+  bootstrap-race deferral requeues explicitly (#91, #95).
+- **Document-size caps** — bound container-component name/version and
+  component count, with recorded (never silent) truncation.
 - **Remaining CI hardening** — `golangci-lint` (with `gosec`) and
   `govulncheck` landed as required jobs after v1.5.0; remaining: image
   scanning as a required job and grouped Dependabot updates.
+
+## October–November — from artifact to an answer
+
+Direction (per the preamble: not commitment): the BOM is evidence; the
+product's job is answering "where is this model, runtime, or digest
+serving — now, last week, across clusters." In flight:
+
+- **`kubectl aibom find`** — the summary table, filtered: runtime,
+  model, image, digest, signature state. Zero matches exits 0 and is
+  documented as "not attributed", never "confirmed absent".
+- **`kubectl aibom discover`** — the pre-opt-in candidate pass:
+  which workloads *would* be inventoried if their namespace were
+  labelled. Client-side, the caller's own RBAC, nothing recorded —
+  the opt-in contract for what the controller *records* is unchanged.
+- **Coverage-gap instrumentation** — an `unresolved` attribution
+  becomes an invitation to report (issue template, a gap count in
+  `summary`), because conservative detection should surface its own
+  false negatives rather than silently absorb them.
+- **v1.7 candidates:** a queryable per-workload answer record beside
+  each archived BOM plus a `{cluster}` path token (the fleet/history
+  dimension); `pkg:oci` purls for container images (ends the
+  byte-identity-to-v1.4.0 property — will be a documented,
+  changelog-led change); a CA option for bearer-auth webhook sinks
+  (#96).
 
 ## Later
 
