@@ -6,6 +6,24 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Metrics are now scrapable, opt-in** (#106). The controller's
+  Prometheus endpoint was registered but bound to loopback with no
+  Service — unreachable by any scraper, which made the chart's
+  "metrics" wording an overclaim and left the shipped
+  `grafana/podmonitoring.yaml` targeting a pod port that did not
+  exist. `metrics.enabled=true` now binds the endpoint on
+  `metrics.port` (8080), names the container port `metrics`, and
+  renders a ClusterIP Service; `metrics.serviceMonitor.enabled=true`
+  additionally renders a Prometheus Operator ServiceMonitor. Off by
+  default; nothing changes for existing installs.
+- **`aibom_workload_reconcile_outcomes_total{kind,outcome}`** — the
+  series that separates "opted-in namespace, nothing recognized" from
+  a broken controller: `not_opted_in` (namespace selector did not
+  match), `unmatched` (opted in, no inference signal — conservative
+  detection declined), `matched` (an AIBOM is produced).
+
 ### Fixed
 
 - **Tenant-controlled document growth is bounded.** Container

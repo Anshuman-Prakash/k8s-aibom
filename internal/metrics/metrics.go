@@ -51,6 +51,22 @@ var (
 		},
 		[]string{"namespace", "kind"},
 	)
+	// WorkloadReconcileOutcomes answers the question a quiet cluster
+	// cannot otherwise answer: is the controller looking at my
+	// workloads and deciding "no"? Outcomes: not_opted_in (namespace
+	// selector did not match), unmatched (opted in, but no inference
+	// signal — conservative detection declined), matched (an AIBOM is
+	// produced). A nonzero unmatched count in an opted-in namespace
+	// is "working as intended, nothing recognized", which is
+	// distinguishable from a broken controller (#106).
+	WorkloadReconcileOutcomes = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "aibom_workload_reconcile_outcomes_total",
+			Help: "Workload reconcile outcomes by kind: not_opted_in, unmatched (opted in, no inference signal), matched",
+		},
+		[]string{"kind", "outcome"},
+	)
+
 	ConfigReloads = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "aibom_controller_config_reloads_total",
@@ -61,5 +77,5 @@ var (
 )
 
 func init() {
-	metrics.Registry.MustRegister(SinkEmitFailures, ScraperExtractionErrors, StatusPersistFailures, ConfigReloads, WorkloadsTotal)
+	metrics.Registry.MustRegister(SinkEmitFailures, ScraperExtractionErrors, StatusPersistFailures, ConfigReloads, WorkloadsTotal, WorkloadReconcileOutcomes)
 }

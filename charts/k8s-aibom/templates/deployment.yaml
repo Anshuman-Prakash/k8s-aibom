@@ -46,9 +46,24 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ include "k8s-aibom.image" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- $args := list }}
           {{- if .Values.readiness.strictConfig }}
+          {{- $args = append $args "--strict-config-readiness" }}
+          {{- end }}
+          {{- if .Values.metrics.enabled }}
+          {{- $args = append $args (printf "--metrics-bind-address=:%d" (int .Values.metrics.port)) }}
+          {{- end }}
+          {{- if $args }}
           args:
-            - --strict-config-readiness
+            {{- range $args }}
+            - {{ . }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.metrics.enabled }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
           {{- end }}
           livenessProbe:
             httpGet:
