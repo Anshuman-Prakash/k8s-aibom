@@ -295,7 +295,14 @@ and a raw kubelet CPU-counter delta over a stated 10-minute window):
 - Deletion: 1,000 AIBOMs garbage-collected in under 2 minutes, memory
   returning toward baseline
 - API-server impact (NVIDIA's measurement, Prometheus-attributed): ~2
-  requests per inventoried workload; 4 long-running watches
+  requests per inventoried workload on a cold start; 4 long-running
+  watches (v1.3.0)
+- Steady state at 1,002 workloads (v1.5.1, live GKE, attributed
+  client-side over a 15-minute window): **under one API request per
+  minute** — watch reconnects only, zero writes, zero reconciles,
+  1.07 mCPU average. Upgrade 23 s, rollback 17–19 s, all AIBOMs and
+  hashes preserved across a full version round trip; see
+  [docs/evidence](docs/evidence/v1.5.1-gke-upgrade-rollback-apiserver.md)
 - 256 KB inline threshold; BOMs exceeding it are offloaded to an
   external sink and referenced by URL in the CR status (boundary
   observed live in NVIDIA/aicr#2310)
