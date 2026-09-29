@@ -189,6 +189,7 @@ func (r *WorkloadReconciler) reconcileWorkload(ctx context.Context, req Workload
 		return ctrl.Result{}, fmt.Errorf("get namespace %s: %w", req.Workload.Namespace, err)
 	}
 	if !snap.NamespaceSelector.Matches(labels.Set(ns.Labels)) {
+		metrics.WorkloadReconcileOutcomes.WithLabelValues(req.Workload.Kind.Kind, "not_opted_in").Inc()
 		logger.V(1).Info("namespace does not match selector; skipping", "workload_namespace", req.Workload.Namespace, "workload_kind", req.Workload.Kind.Kind, "workload_name", req.Workload.Name)
 		aibom := &aibomv1beta1.AIBOM{}
 		if err := r.Get(ctx, types.NamespacedName{Name: req.AIBOMName, Namespace: req.Workload.Namespace}, aibom); err == nil {
@@ -213,7 +214,10 @@ func (r *WorkloadReconciler) reconcileWorkload(ctx context.Context, req Workload
 	if inputs.Confidence == scraper.ConfidenceUnresolved {
 		// No inference signal. Per the discovery rule documented in
 		// docs/scraper-heuristics.md, this workload is not classified
-		// as inference; do not create an AIBOM.
+		// as inference; do not create an AIBOM. Counted so an opted-in
+		// namespace full of unrecognized workloads is visibly "seen and
+		// declined" rather than indistinguishable from a dead controller.
+		metrics.WorkloadReconcileOutcomes.WithLabelValues(req.Workload.Kind.Kind, "unmatched").Inc()
 		logger.V(1).Info("workload has no inference signal; skipping AIBOM creation", "workload_namespace", req.Workload.Namespace, "workload_kind", req.Workload.Kind.Kind, "workload_name", req.Workload.Name)
 		aibom := &aibomv1beta1.AIBOM{}
 		if err := r.Get(ctx, types.NamespacedName{Name: req.AIBOMName, Namespace: req.Workload.Namespace}, aibom); err == nil {
@@ -225,6 +229,8 @@ func (r *WorkloadReconciler) reconcileWorkload(ctx context.Context, req Workload
 		}
 		return ctrl.Result{}, nil
 	}
+
+	metrics.WorkloadReconcileOutcomes.WithLabelValues(req.Workload.Kind.Kind, "matched").Inc()
 
 	// Compute the input hash and consult any existing AIBOM CR to see
 	// whether this reconcile would produce content-identical output.

@@ -12,6 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# GKE Managed Prometheus scrape config for the controller.
+#
+# Requires the chart installed with metrics.enabled=true: that is what
+# binds the metrics endpoint beyond loopback and names the pod port
+# `metrics` that this resource targets. With metrics disabled (the
+# default) there is nothing to scrape and this PodMonitoring is inert.
+# Alternatively, use the chart's own metrics.serviceMonitor for the
+# Prometheus Operator.
 apiVersion: monitoring.googleapis.com/v1
 kind: PodMonitoring
 metadata:
