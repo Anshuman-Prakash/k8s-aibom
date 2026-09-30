@@ -29,12 +29,16 @@ artifact* is bad; the BOM tells you *where that artifact is serving*.
 ### 1. Fleet view: which workloads run the affected runtime?
 
 ```
-kubectl aibom summary -A
+kubectl aibom find --runtime litellm -A
 ```
 
-The RUNTIME column attributes every tracked workload. During the
-litellm incident, every row with runtime `litellm` is your candidate
-set — one command, no ssh, no spreadsheet census.
+Every tracked workload attributed to that runtime, in one command — no
+ssh, no spreadsheet census. `find` also filters by `--model`,
+`--image`, `--digest` (bare hex or `sha256:`-prefixed, prefix matches)
+and `--signed`, and the filters AND together. Zero matches prints
+`0 matches` and exits 0, so an incident script can tell "none found"
+from "the plugin broke". (`kubectl aibom summary -A` remains the
+unfiltered view.)
 
 Runtime attribution is `inferred` (matched from the image against the
 [audit-reviewable allowlist](../internal/scraper/v1-runtime-patterns.yaml)),

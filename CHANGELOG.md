@@ -8,6 +8,17 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ### Added
 
+- **`kubectl aibom find`** — the incident command: filter tracked
+  workloads by `--runtime` (exact), `--model` (case-sensitive
+  substring), `--image` (substring of the container reference),
+  `--digest` (bare hex or `sha256:`-prefixed; a prefix matches) and
+  `--signed` (unsigned | claimed | verified); filters AND together.
+  Zero matches prints `0 matches` and exits 0 so scripts can tell
+  "none found" from "plugin broke". Rows whose document is in an
+  external sink or truncated are shown — never excluded — under
+  image/digest filters, with a stderr warning. Same client and RBAC
+  as `summary`; no new CRD, no controller flag.
+
 - **Infinity embeddings server runtime pattern** (#111).
   `michaelf34/infinity` (tag and digest forms, including `0.0.77-cpu`
   and `0.0.77-rocm`) attributes as runtime `infinity`. The match is
