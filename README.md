@@ -192,6 +192,8 @@ kubectl apply -f https://github.com/GoogleCloudPlatform/k8s-aibom/releases/downl
 
 (or apply the `crds/` directory from the matching chart). Within 1.x, CRD changes are additive only. **One exception to "degrades gracefully": upgrading to the `v1beta1` graduation release requires the CRD apply** — the graduated controller's informers need the CRDs to serve `v1beta1`, and readiness stays failing (loudly, by design) until they do. Full procedure and the storage-migration details: [docs/migration-v1beta1.md](docs/migration-v1beta1.md).
 
+If `config.verification` is set and the installed CRDs predate it, the chart refuses the upgrade before applying anything and prints the CRD-apply command to run first. That check reads the installed `AIBOMControllerConfig` CRD, so an upgrade with `config.verification` set needs a Helm identity that can `get` it. CRDs that Helm installed are owned by Helm's field manager, so applying them server-side under another manager needs `--force-conflicts`.
+
 ### Uninstall
 
 ```bash

@@ -87,3 +87,25 @@ releases can pin the image immutably without patching the chart.
 {{- printf "%s:%s" .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) }}
 {{- end }}
 {{- end }}
+
+{{/*
+Fail before anything is applied when config.verification would render
+against an installed AIBOMControllerConfig CRD whose v1beta1 schema
+predates the field (#105). Helm skips crds/ on upgrade, and on install
+when CRDs outlived an uninstall. Without the guard, Helm 4's server-side
+apply of the config CR fails after the Deployment has rolled, and Helm
+3's patch succeeds with spec.verification pruned. lookup is empty under
+helm template and client-side dry-run, so the guard no-ops there, and it
+only runs when verification is set, so default renders never depend on
+reading CRDs.
+*/}}
+{{- define "k8s-aibom.verificationSchemaGuard" -}}
+{{- if .Values.config.verification }}
+{{- $crd := lookup "apiextensions.k8s.io/v1" "CustomResourceDefinition" "" "aibomcontrollerconfigs.aibom.k8saibom.dev" }}
+{{- range (dig "spec" "versions" list $crd) }}
+{{- if and (eq .name "v1beta1") (not (hasKey (dig "schema" "openAPIV3Schema" "properties" "spec" "properties" dict .) "verification")) }}
+{{- fail (printf "config.verification is set, but the installed AIBOMControllerConfig CRD does not declare spec.verification (Helm does not upgrade CRDs). Applying this release would roll the controller and then fail on the config (Helm 4) or silently drop verification (Helm 3). Apply this chart's CRDs, then retry:\n  helm show crds oci://ghcr.io/googlecloudplatform/charts/k8s-aibom --version %s | kubectl apply --server-side --force-conflicts --field-manager=k8s-aibom-crds -f -" $.Chart.Version) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

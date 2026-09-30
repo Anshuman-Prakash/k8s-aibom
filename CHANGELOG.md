@@ -58,6 +58,22 @@ All notable changes to k8s-aibom are documented here. The format follows
   field cannot reintroduce the failure. Found by downstream
   adversarial upgrade testing (NVIDIA AICR qualification of v1.5.1).
 
+- **An upgrade that sets `config.verification` against pre-1.5 CRDs now
+  stops before anything is applied** (#105). Helm skips `crds/` on
+  upgrade. On Helm 4 the config CR's server-side apply then failed with
+  `.spec.verification: field not declared in schema` only after the
+  Deployment had rolled, leaving the release `failed` and half-applied;
+  on Helm 3 the upgrade succeeded and the API server pruned
+  `spec.verification`, leaving verification off. When
+  `config.verification` is set, the chart now reads the installed
+  `AIBOMControllerConfig` CRD with `lookup` and, if its `v1beta1`
+  schema lacks `spec.verification`, fails at render time with the
+  CRD-apply command. Default values never perform the lookup, and
+  `helm template` and client-side `--dry-run` are unaffected. With
+  `config.verification` set, the Helm identity now needs `get` on that
+  CRD; without it the render fails on `lookup` before anything is
+  applied. Found by the same downstream qualification.
+
 - **Tenant-controlled document growth is bounded.** Container
   component name/version are truncated on the same rule as every
   other authored string, and a per-document component cap (256)
