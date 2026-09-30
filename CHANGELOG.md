@@ -26,6 +26,22 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ### Fixed
 
+- **Served-schema skew is now detected and reported** (#104). If the
+  cluster's `AIBOMControllerConfig` CRD is replaced by an older schema
+  than the running controller (a GitOps sync pinned to an older
+  revision, a `CreateReplace` rollback, a manual CRD re-apply), the API
+  server silently prunes stored fields such as `spec.verification` —
+  previously leaving signature verification OFF behind a fully green
+  status. The controller now reads the served schema via the OpenAPI
+  v3 endpoint (no new RBAC beyond what `system:discovery` already
+  grants; stated explicitly in the ClusterRole) and compares it
+  against every top-level spec field it was built with. Any missing
+  field yields `Degraded=True` with reason `SchemaPredatesController`,
+  a Warning Event naming the fields and the remedy, and a log line.
+  The check is generic over the spec struct, so the next additive
+  field cannot reintroduce the failure. Found by downstream
+  adversarial upgrade testing (NVIDIA AICR qualification of v1.5.1).
+
 - **Tenant-controlled document growth is bounded.** Container
   component name/version are truncated on the same rule as every
   other authored string, and a per-document component cap (256)

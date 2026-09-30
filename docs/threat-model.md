@@ -74,7 +74,13 @@ read surface is the Kubernetes API.
 - **B5 — Configuration (T2 → controller).** AIBOMControllerConfig is
   validated all-or-nothing at load: any semantic error falls back to
   compiled defaults with Ready=False naming every error. Secrets are
-  read only from the controller's own namespace.
+  read only from the controller's own namespace. **CRD lifecycle is
+  part of this boundary:** a served schema older than the controller
+  causes the API server to prune newer stored fields without error;
+  the controller detects this by comparing the served OpenAPI v3
+  schema against its compiled-in spec and reports `Degraded=True`
+  (F7), because a security control that is silently off must never
+  present as green.
 - **B6 — RBAC posture.** Read-only get/list/watch on workloads, pods,
   replicasets, namespaces; write only on AIBOM CRs; optional
   Secret access is chart-gated (`rbac.sinkSecretAccess`).
@@ -140,3 +146,4 @@ scope for this controller (see roadmap "Out of scope — permanently").
 | F4 | Container-component name/version and component count unbounded (tenant-controlled document growth) | Open; v1.6 |
 | F5 | Verifier fetch lacks a private-IP dial guard (internal-endpoint oracle; off-by-default feature) | Open; doc'd here; guard is a v1.6 candidate |
 | F6 | Bearer auth has no CA option, forcing public-CA https (#96) | Open; v1.6 candidate |
+| F7 | Served CRD schema older than the controller silently prunes `spec.verification`; verification OFF behind `Ready=True` (#104). Found by downstream adversarial upgrade testing | Fixed on main; ships v1.6 — `Degraded=True` reason `SchemaPredatesController` + Warning Event, generic over all spec fields |

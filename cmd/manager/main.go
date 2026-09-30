@@ -47,6 +47,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -222,12 +223,18 @@ func main() {
 		},
 	}
 
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(mgr.GetConfig())
+	if err != nil {
+		log.Error(err, "unable to create discovery client for served-schema check")
+		os.Exit(1)
+	}
 	if err := (&controller.AIBOMControllerConfigReconciler{
 		Client:        mgr.GetClient(),
 		Loader:        loader,
 		ConfigStore:   configStore,
 		Recorder:      mgr.GetEventRecorderFor("k8s-aibom-config"), //nolint:staticcheck
 		ControllerPod: controllerPod,
+		SchemaChecker: controller.NewOpenAPISchemaChecker(discoveryClient.OpenAPIV3()),
 	}).SetupWithManager(mgr); err != nil {
 		log.Error(err, "unable to set up AIBOMControllerConfigReconciler")
 		os.Exit(1)
