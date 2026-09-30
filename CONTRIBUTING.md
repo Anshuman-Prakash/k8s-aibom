@@ -1,9 +1,12 @@
 # Contributing to k8s-aibom
 
 Contributions are welcome. The most valuable ones today: detection
-patterns for runtimes we don't recognize yet, reports of workload
-shapes the scrapers misread, scraper support for new workload kinds,
-and corrections to documentation. If you run the controller somewhere
+patterns for runtimes we don't recognize yet (there is a
+[step-by-step guide](docs/contributing-a-pattern.md) built from a real
+first-time contribution, and pre-scoped issues labeled
+`good-first-pattern`), reports of workload shapes the scrapers misread,
+scraper support for new workload kinds, and corrections to
+documentation. If you run the controller somewhere
 interesting, a bug report with the workload spec that confused it is a
 genuinely useful contribution.
 
@@ -75,7 +78,9 @@ verification behavior. The verifier is a nested Go module under
 Fork, branch, open a PR against `main`. CI runs the test suite, the
 e2e matrix, static analysis, workflow linting, and a release dry-run;
 all of it must pass. Every merge requires review from a maintainer.
-Small, focused PRs review faster than large ones.
+Small, focused PRs review faster than large ones. **Detection-pattern
+PRs are reviewed within 48 hours**; other changes as soon as
+practical.
 
 ## Where to file what
 
