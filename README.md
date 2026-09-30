@@ -347,6 +347,8 @@ k8s-aibom complements, rather than replaces, the broader AI supply-chain transpa
 
 ## Contributing
 
+The fastest way in is a detection pattern — see [Contributing a detection pattern](docs/contributing-a-pattern.md) and the open [`good-first-pattern`](https://github.com/GoogleCloudPlatform/k8s-aibom/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-pattern) issues. Pattern PRs are reviewed within 48 hours.
+
 Issues, pull requests, and feedback welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, testing discipline, and the conventions the project is built around.
 
 Areas where contributions are particularly valuable:
