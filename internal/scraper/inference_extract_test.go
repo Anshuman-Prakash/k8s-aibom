@@ -328,6 +328,18 @@ func TestInferenceConfig_DetectRuntime(t *testing.T) {
 		{"ghcr.io/berriai/litellm-non_root:main-v1.81.0", "litellm"},
 		{"ghcr.io/berriai-forks/litellm:1.0", ""},
 		{"docker.io/berriai/litellm:main", ""}, // ghcr only: the publisher's canonical registry
+
+		// Infinity embeddings/reranking server — publisher-anchored Docker
+		// Hub image. Tag and digest forms match; name-prefix and
+		// other-registry near-misses do not. DetectRuntime does not strip
+		// a registry prefix, so ghcr.io stays quiet.
+		{"michaelf34/infinity:0.0.77", "infinity"},
+		{"michaelf34/infinity:0.0.77-cpu", "infinity"},
+		{"michaelf34/infinity:0.0.77-rocm", "infinity"},
+		{"michaelf34/infinity@sha256:abc", "infinity"},
+		{"michaelf34/infinity-extra:1", ""},
+		{"otheruser/infinity:0.0.77", ""},
+		{"ghcr.io/michaelf34/infinity:0.0.77", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.image, func(t *testing.T) {
