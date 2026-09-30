@@ -129,11 +129,12 @@ Always install from a release asset; the `install.yaml` at the repo root is a de
 kubectl krew install aibom   # or: go install github.com/GoogleCloudPlatform/k8s-aibom/cmd/kubectl-aibom@latest
 
 kubectl aibom summary -n prod-jobs        # table: workload, category, runtime, models, confidence, Ready
+kubectl aibom find --runtime litellm -A   # where is X running? filters: --runtime --model --image --digest --signed
 kubectl aibom view <aibom-name> -n prod-jobs        # decoded, pretty-printed BOM (--raw for canonical bytes)
 kubectl aibom verify <aibom-name> -n prod-jobs      # recompute sha256 vs the published digest; non-zero exit on mismatch
 ```
 
-`summary` includes per-model signature state, and `verify` prints signature facts (since v1.5.0, Design 002). The plugin is distributed via [krew](https://krew.sigs.k8s.io/) as `aibom`, with attested binaries on each release.
+`find` is the incident command — "where is this runtime / model / image / digest serving right now?" — with filters that AND together; zero matches prints `0 matches` and exits 0 so scripts can tell "none found" from "plugin broke". Zero matches is never proof of absence: namespaces that are not opted in, images not on the detection allowlist, and unresolved digests are invisible by design, and rows whose document lives in an external sink are shown (not excluded) under image/digest filters, with a warning. `summary` includes per-model signature state, and `verify` prints signature facts (since v1.5.0, Design 002). The plugin is distributed via [krew](https://krew.sigs.k8s.io/) as `aibom`, with attested binaries on each release.
 
 ### Verify the supply chain (optional)
 

@@ -1,0 +1,150 @@
+/*
+Copyright 2026 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package main
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+const testDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+// containerDoc is a minimal emitted-shape CycloneDX document: one
+// container component with image.reference and a SHA-256 hash, plus a
+// model component that find must ignore for image/digest purposes.
+func containerDoc(image, digest string) []byte {
+	return []byte(`{"bomFormat":"CycloneDX","specVersion":"1.6","components":[
+	 {"type":"container","name":"x","hashes":[{"alg":"SHA-256","content":"` + digest + `"}],
+	  "properties":[{"name":"image.reference","value":"` + image + `"},{"name":"container.name","value":"vllm"}]},
+	 {"type":"machine-learning-model","name":"m","properties":[{"name":"identity.confidence","value":"claimed"}]}
+	]}`)
+}
+
+func findItems(t *testing.T) []unstructured.Unstructured {
+	t.Helper()
+	// fixtureAIBOM: runtime vllm, model Qwen/Qwen2.5-0.5B-Instruct,
+	// signed verified, confidence declared, namespace prod-jobs.
+	a := fixtureAIBOM(t, containerDoc("vllm/vllm-openai:v0.6.3", testDigest), false)
+	// A second workload on a different runtime and image.
+	b := fixtureAIBOM(t, containerDoc("ghcr.io/berriai/litellm:main-v1.81.0", strings.Repeat("ab", 32)), false)
+	b.SetName("apps-deployment-gateway")
+	_ = unstructured.SetNestedField(b.Object, "litellm", "status", "summary", "runtime", "name")
+	_ = unstructured.SetNestedField(b.Object, "gateway", "status", "summary", "workload", "name")
+	_ = unstructured.SetNestedSlice(b.Object, []interface{}{
+		map[string]interface{}{"identity": "openai/gpt-4o", "signed": "unsigned"},
+	}, "status", "summary", "models")
+	return []unstructured.Unstructured{*a, *b, *fixtureTruncated()}
+}
+
+func runFindCapture(t *testing.T, items []unstructured.Unstructured, f findFilter) (out, errOut string) {
+	t.Helper()
+	var o, e bytes.Buffer
+	if err := runFind(items, f, &o, &e); err != nil {
+		t.Fatalf("runFind: %v", err)
+	}
+	return o.String(), e.String()
+}
+
+func TestFind_RuntimeExact(t *testing.T) {
+	out, _ := runFindCapture(t, findItems(t), findFilter{runtime: "vllm"})
+	if !strings.Contains(out, "vllm-qwen") || strings.Contains(out, "gateway") {
+		t.Fatalf("runtime filter wrong:\n%s", out)
+	}
+	if strings.Contains(out, "0 matches") {
+		t.Fatalf("expected a match:\n%s", out)
+	}
+}
+
+func TestFind_ModelSubstringCaseSensitive(t *testing.T) {
+	out, _ := runFindCapture(t, findItems(t), findFilter{model: "Qwen2.5"})
+	if !strings.Contains(out, "vllm-qwen") || strings.Contains(out, "gateway") {
+		t.Fatalf("model substring wrong:\n%s", out)
+	}
+	out, _ = runFindCapture(t, findItems(t), findFilter{model: "qwen2.5"})
+	if !strings.Contains(out, "0 matches") {
+		t.Fatalf("model match must be case-sensitive (registry identities are):\n%s", out)
+	}
+}
+
+func TestFind_DigestBareAndPrefixed(t *testing.T) {
+	for _, d := range []string{testDigest, "sha256:" + testDigest, testDigest[:12]} {
+		out, _ := runFindCapture(t, findItems(t), findFilter{digest: d})
+		if !strings.Contains(out, "vllm-qwen") || strings.Contains(out, "gateway") {
+			t.Fatalf("digest %q wrong:\n%s", d, out)
+		}
+	}
+}
+
+func TestFind_ImageSubstring(t *testing.T) {
+	out, _ := runFindCapture(t, findItems(t), findFilter{image: "berriai/litellm"})
+	if !strings.Contains(out, "gateway") || strings.Contains(out, "vllm-qwen") {
+		t.Fatalf("image filter wrong:\n%s", out)
+	}
+}
+
+func TestFind_SignedState(t *testing.T) {
+	out, _ := runFindCapture(t, findItems(t), findFilter{signed: "verified"})
+	if !strings.Contains(out, "vllm-qwen") || strings.Contains(out, "gateway") {
+		t.Fatalf("signed filter wrong:\n%s", out)
+	}
+}
+
+func TestFind_FiltersAreANDed(t *testing.T) {
+	out, _ := runFindCapture(t, findItems(t), findFilter{runtime: "vllm", image: "litellm"})
+	if !strings.Contains(out, "0 matches") {
+		t.Fatalf("AND of disjoint filters must be empty:\n%s", out)
+	}
+}
+
+func TestFind_ZeroMatchesIsASuccessfulRun(t *testing.T) {
+	out, errOut := runFindCapture(t, findItems(t), findFilter{runtime: "triton"})
+	if strings.TrimSpace(out) != "0 matches" {
+		t.Fatalf("zero matches must print exactly '0 matches' on stdout, got %q", out)
+	}
+	if errOut != "" {
+		t.Fatalf("no warning expected: %q", errOut)
+	}
+}
+
+func TestFind_UnavailableDocumentIsShownNotExcluded(t *testing.T) {
+	// The truncated fixture cannot be evaluated for a digest filter. It
+	// must appear in the output (IMAGES=truncated) with a warning — never
+	// be silently counted as a non-match.
+	out, errOut := runFindCapture(t, findItems(t), findFilter{digest: "deadbeef"})
+	if !strings.Contains(out, "big") || !strings.Contains(out, "truncated") {
+		t.Fatalf("truncated row must be shown under a digest filter:\n%s", out)
+	}
+	if !strings.Contains(errOut, "shown, not excluded") {
+		t.Fatalf("expected a stderr warning naming the unevaluated row, got %q", errOut)
+	}
+	// And rows that WERE evaluated and did not match are excluded.
+	if strings.Contains(out, "vllm-qwen") || strings.Contains(out, "gateway") {
+		t.Fatalf("evaluated non-matches leaked into output:\n%s", out)
+	}
+}
+
+func TestFind_NoFilterListsEverythingWithImages(t *testing.T) {
+	out, _ := runFindCapture(t, findItems(t), findFilter{})
+	for _, want := range []string{"NAMESPACE", "IMAGES", "vllm/vllm-openai:v0.6.3", "ghcr.io/berriai/litellm:main-v1.81.0", "big"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q:\n%s", want, out)
+		}
+	}
+}

@@ -35,6 +35,7 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
@@ -57,16 +58,27 @@ func run(args []string) error {
 	fs := flag.NewFlagSet("kubectl-aibom", flag.ContinueOnError)
 	var (
 		namespace  = fs.String("n", "", "namespace (defaults to the current kubeconfig namespace)")
-		allNS      = fs.Bool("A", false, "all namespaces (summary only)")
+		allNS      = fs.Bool("A", false, "all namespaces (summary and find)")
 		raw        = fs.Bool("raw", false, "view: emit canonical bytes instead of pretty-printed JSON")
+		fRuntime   = fs.String("runtime", "", "find: exact match on the attributed runtime name (e.g. vllm)")
+		fModel     = fs.String("model", "", "find: case-sensitive substring of a model identity")
+		fImage     = fs.String("image", "", "find: substring of a container image reference")
+		fDigest    = fs.String("digest", "", "find: image sha256 (bare hex or sha256:-prefixed; a prefix matches)")
+		fSigned    = fs.String("signed", "", "find: model signature state: unsigned | claimed | verified")
 		kubeconfig = fs.String("kubeconfig", "", "path to the kubeconfig file")
 		kubectx    = fs.String("context", "", "kubeconfig context to use")
 	)
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), `Usage:
   kubectl aibom summary [-n namespace | -A]
+  kubectl aibom find [--runtime R] [--model M] [--image I] [--digest D] [--signed S] [-n namespace | -A]
   kubectl aibom view <aibom-name> [-n namespace] [--raw]
   kubectl aibom verify <aibom-name> [-n namespace]
+
+find answers "where is this running?" — filters AND together; zero
+matches prints "0 matches" and exits 0. Zero matches is not proof of
+absence: namespaces that are not opted in, images not on the detection
+allowlist, and unresolved digests are invisible here by design.
 
 Flags:
 `)
@@ -140,6 +152,27 @@ Flags:
 			return err
 		}
 		return runSummary(l.Items, os.Stdout)
+
+	case "find":
+		f := findFilter{runtime: *fRuntime, model: *fModel, image: *fImage, digest: *fDigest, signed: *fSigned}
+		if f.signed != "" && f.signed != "unsigned" && f.signed != "claimed" && f.signed != "verified" {
+			return fmt.Errorf("--signed must be one of unsigned, claimed, verified")
+		}
+		var items []unstructured.Unstructured
+		if *allNS {
+			l, err := dyn.Resource(aibomGVR).List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return err
+			}
+			items = l.Items
+		} else {
+			l, err := dyn.Resource(aibomGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return err
+			}
+			items = l.Items
+		}
+		return runFind(items, f, os.Stdout, os.Stderr)
 
 	case "view", "verify":
 		if len(positional) != 1 {
