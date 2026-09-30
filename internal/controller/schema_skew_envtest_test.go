@@ -130,6 +130,17 @@ func TestReconcile_SchemaPredatesController_IsNotGreen(t *testing.T) {
 		t.Fatalf("Ready should remain True when the spec loaded; got %+v", ready)
 	}
 
+	// Strict-readiness contract (--strict-config-readiness reads
+	// ConfigStore.ConfigInvalid, which is set only from the state
+	// machine's stateInvalid classification): schema skew is a
+	// Degraded condition, NOT a config-invalid state. A distribution
+	// running strict readiness (AICR does) must see the skew as a
+	// signal, never as a readiness failure that blocks its health
+	// check. Regression for the question raised on NVIDIA/aicr#2962.
+	if r.ConfigStore.ConfigInvalid() {
+		t.Fatalf("schema skew flipped ConfigInvalid=true; strict readiness would fail the pod for a condition that is informational by design")
+	}
+
 	// Warning Event, once, naming the reason.
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
