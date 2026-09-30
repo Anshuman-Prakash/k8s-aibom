@@ -111,7 +111,15 @@ runtimeImagePatterns:
   # pattern) and standalone under Dynamo (`tensorrtllm-runtime` above).
   # The namespaces are distinct, so the two patterns cannot
   # double-count one workload.
-  #
+
+  # Infinity — michaelf34/infinity embeddings and reranking server on
+  # Docker Hub. Anchored at the image-name boundary so tag and digest
+  # forms match (including 0.0.77-cpu and 0.0.77-rocm) while
+  # michaelf34/infinity-extra and other registries do not. Not a
+  # prefix and not a mirror pattern.
+  - runtime: infinity
+    pattern: '^michaelf34/infinity(?:[:@]|$)'
+
   # NOT added in Phase 11: registry-prefix matching for mirrored
   # images (Artifact Registry, ECR, private mirrors). The asymmetry
   # between false negatives (honest BOM with unresolved runtime) and

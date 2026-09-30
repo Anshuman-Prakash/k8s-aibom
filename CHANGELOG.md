@@ -8,6 +8,11 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ### Added
 
+- **Infinity embeddings server runtime pattern** (#111).
+  `michaelf34/infinity` (tag and digest forms, including `0.0.77-cpu`
+  and `0.0.77-rocm`) attributes as runtime `infinity`. The match is
+  publisher-anchored at the image-name boundary, so
+  `michaelf34/infinity-extra` and other registries stay unmatched.
 - **Metrics are now scrapable, opt-in** (#106). The controller's
   Prometheus endpoint was registered but bound to loopback with no
   Service — unreachable by any scraper, which made the chart's
