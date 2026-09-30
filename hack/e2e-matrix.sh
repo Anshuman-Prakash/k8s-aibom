@@ -15,13 +15,14 @@
 
 # Non-default-configuration e2e matrix (issue #59). Runs against a kind
 # cluster where the chart is already installed and Available (the base
-# e2e job's end state). Three legs, each exercising a configuration the
+# e2e job's end state). Four legs, each exercising a configuration the
 # default install never touches:
 #
 #   A. strict configuration readiness — break/recover
 #   B. sinks under real RBAC (bearer-token Secret, sinkSecretAccess)
 #   C. signature verification — verified and tampered outcomes,
 #      staticBundle trust root via the new extraVolumes support
+#   D. verification against a stale CRD — refused before any apply
 #
 # Requirements: kubectl + helm on PATH, cwd = repo root, image already
 # loaded into the cluster (base job), release name k8s-aibom in
@@ -274,5 +275,58 @@ signed_state() {
 wait_for 120 "good signature reaches verified" bash -c '[ "$(kubectl -n matrix-e2e get aibom apps-deployment-goodsig -o jsonpath="{.status.summary.models[0].signed}" 2>/dev/null)" = "verified" ]'
 wait_for 120 "tampered signature stays claimed" bash -c '[ "$(kubectl -n matrix-e2e get aibom apps-deployment-badsig -o jsonpath="{.status.summary.models[0].signed}" 2>/dev/null)" = "claimed" ]'
 log "LEG C passed"
+
+# ---------------------------------------------------------------------------
+log "LEG D: verification against a stale CRD is refused before anything applies (#105)"
+# ---------------------------------------------------------------------------
+# Leg C left config.verification set. Serve a v1.3-shaped schema (no
+# spec.verification) and upgrade with a pod-template change: the chart
+# must fail at render time, so Helm records no revision and the
+# Deployment does not roll. Then run the remedy the error prints, with
+# the local chart standing in for the published one.
+CRD=aibomcontrollerconfigs.aibom.k8saibom.dev
+last_revision() {
+  helm history "$RELEASE" -n "$NS_SYS" --max 1 -o json \
+    | python3 -c 'import json, sys; print(json.load(sys.stdin)[-1]["revision"])'
+}
+deploy_generation() {
+  kubectl -n "$NS_SYS" get deploy "$RELEASE" -o jsonpath='{.metadata.generation}'
+}
+rev_before=$(last_revision)
+gen_before=$(deploy_generation)
+
+kubectl get crd "$CRD" -o json | python3 -c '
+import json, sys
+crd = json.load(sys.stdin)
+for v in crd["spec"]["versions"]:
+    v["schema"]["openAPIV3Schema"]["properties"]["spec"]["properties"].pop("verification", None)
+json.dump(crd, sys.stdout)' | kubectl replace -f - >/dev/null
+
+# Renders that do not read the cluster get an empty lookup, so the guard
+# must stay silent even with the stale CRD in place.
+rendered=$(helm template "$RELEASE" "$CHART" -n "$NS_SYS" \
+  --set config.verification.enabled=true) \
+  || fail "helm template with verification set failed; the guard must no-op without a cluster read"
+grep -q 'verification:' <<<"$rendered" || fail "helm template did not render spec.verification"
+helm upgrade "$RELEASE" "$CHART" "${HELM_BASE_ARGS[@]}" --dry-run >/dev/null \
+  || fail "client-side dry-run failed; the guard must no-op without a cluster read"
+
+if out=$(helm upgrade "$RELEASE" "$CHART" "${HELM_BASE_ARGS[@]}" \
+    --set podAnnotations.e2e-leg=d 2>&1); then
+  fail "upgrade with verification succeeded against a CRD without spec.verification"
+fi
+grep -q "does not declare spec.verification" <<<"$out" \
+  || fail "upgrade failed without the preflight message: $out"
+[ "$(last_revision)" = "$rev_before" ] || fail "the refused upgrade recorded a release revision"
+[ "$(deploy_generation)" = "$gen_before" ] || fail "the Deployment changed during the refused upgrade"
+
+helm show crds "$CHART" \
+  | kubectl apply --server-side --force-conflicts --field-manager=k8s-aibom-crds -f - >/dev/null
+helm upgrade "$RELEASE" "$CHART" "${HELM_BASE_ARGS[@]}" \
+  --set podAnnotations.e2e-leg=d --wait --timeout 2m >/dev/null
+wait_for 60 "pod Ready after applying the CRDs" pod_ready True
+[ "$(kubectl get aibomcontrollerconfig default -o jsonpath='{.spec.verification.enabled}')" = "true" ] \
+  || fail "spec.verification was not restored after the CRD apply and upgrade"
+log "LEG D passed"
 
 log "e2e matrix: ALL LEGS PASSED"

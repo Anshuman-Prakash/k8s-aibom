@@ -76,5 +76,6 @@ jobs:
     - name: Non-default configuration matrix (issue #59)
       # Strict readiness break/recover; sinks under real RBAC with a
       # bearer-token Secret; signature verification (staticBundle trust
-      # root via extraVolumes) with verified and tampered outcomes.
+      # root via extraVolumes) with verified and tampered outcomes;
+      # verification against a stale CRD refused before any apply (#105).
       run: bash hack/e2e-matrix.sh
