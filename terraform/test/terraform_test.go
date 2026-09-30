@@ -55,24 +55,24 @@ func TestTerraformK8sAibom(t *testing.T) {
 
 	// 4. Ensure we clean up resources automatically at the end of the test
 	defer func() {
-		terraform.DestroyContext(context.Background(), t, terraformOptions)
+		terraform.DestroyContext(t, context.Background(), terraformOptions)
 		// Terraform Helm provider with create_namespace=true does not delete the namespace on destroy.
 		// We use RunKubectlE because the namespace might not have been created if apply failed early.
-		_ = k8s.RunKubectlContextE(context.Background(), t, kubectlOptions, "delete", "namespace", namespace, "--ignore-not-found=true")
+		_ = k8s.RunKubectlContextE(t, context.Background(), kubectlOptions, "delete", "namespace", namespace, "--ignore-not-found=true")
 	}()
 
 	// 5. Run `terraform init` and `terraform apply`
-	terraform.InitAndApplyContext(context.Background(), t, terraformOptions)
+	terraform.InitAndApplyContext(t, context.Background(), terraformOptions)
 
 	// 6. Validation: Verify Helm deployment succeeded by inspecting the Kubernetes cluster
 	// Wait for the Helm release to deploy the pods
-	k8s.WaitUntilNumPodsCreatedContext(context.Background(), t, kubectlOptions, metav1.ListOptions{
+	k8s.WaitUntilNumPodsCreatedContext(t, context.Background(), kubectlOptions, metav1.ListOptions{
 		LabelSelector: "app.kubernetes.io/name=k8s-aibom",
 	}, 1, 30, 10*time.Second)
 
 	// Poll until the pod is actually in the Running state
-	retry.DoWithRetryContext(context.Background(), t, "Wait for pod to be running", 30, 10*time.Second, func() (string, error) {
-		pods := k8s.ListPodsContext(context.Background(), t, kubectlOptions, metav1.ListOptions{
+	retry.DoWithRetryContext(t, context.Background(), "Wait for pod to be running", 30, 10*time.Second, func() (string, error) {
+		pods := k8s.ListPodsContext(t, context.Background(), kubectlOptions, metav1.ListOptions{
 			LabelSelector: "app.kubernetes.io/name=k8s-aibom",
 		})
 		if len(pods) == 0 {
