@@ -8,6 +8,21 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ### Added
 
+- **NVIDIA NIM Operator `NIMService` scraper** (Design 003 §1; v1.6
+  coverage release). One AIBOM per NIMService. The kind itself is a
+  **declared** runtime (`nim`); `spec.image` becomes the container
+  component (digest only when the repository is digest-pinned);
+  `spec.env` / `spec.args` go through the existing model allowlists
+  with `spec.env[i]` / `spec.args[i]` locators; the NIM image path
+  `nvcr.io/nim/<org>/<name>` yields an **inferred** model identity
+  **only when nothing is declared** — declared `NIM_MODEL_NAME` /
+  `NIM_SERVED_MODEL_NAME`, args or annotations always win (the AICR
+  case of a llama NIM image serving Qwen reports Qwen). Storage shape
+  (`nimCache` / `pvc` / `hostPath` / `emptyDir`), multi-node topology
+  and inference platform are recorded as properties. Registered only
+  when the CRD is present; RBAC adds get/list/watch on
+  `nimservices.apps.nvidia.com`.
+
 - **NVIDIA Dynamo `DynamoGraphDeployment` scraper** (Design 003 §4;
   v1.6 coverage release). One AIBOM per graph, keyed to the DGD.
   `spec.backendFramework` becomes a **declared** runtime (`trtllm`

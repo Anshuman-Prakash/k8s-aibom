@@ -136,6 +136,8 @@ func startEnvTest(t *testing.T) *envTestEnv {
 	kserveBase.Scraper = scraper.NewKServeInferenceServiceScraper(nil)
 	dynamoBase := inferenceBase
 	dynamoBase.Scraper = scraper.NewDynamoGraphDeploymentScraper(nil)
+	nimBase := inferenceBase
+	nimBase.Scraper = scraper.NewNIMServiceScraper(nil)
 
 	if err := (&DeploymentReconciler{WorkloadReconciler: inferenceBase}).SetupWithManager(mgr); err != nil {
 		t.Fatalf("SetupWithManager DeploymentReconciler: %v", err)
@@ -154,6 +156,9 @@ func startEnvTest(t *testing.T) *envTestEnv {
 	}
 	if err := (&DynamoGraphDeploymentReconciler{WorkloadReconciler: dynamoBase}).SetupWithManager(mgr); err != nil {
 		t.Fatalf("SetupWithManager DynamoGraphDeploymentReconciler: %v", err)
+	}
+	if err := (&NIMServiceReconciler{WorkloadReconciler: nimBase}).SetupWithManager(mgr); err != nil {
+		t.Fatalf("SetupWithManager NIMServiceReconciler: %v", err)
 	}
 
 	mgrCtx, mgrCancel := context.WithCancel(context.Background())
