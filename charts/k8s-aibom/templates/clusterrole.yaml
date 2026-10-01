@@ -45,6 +45,10 @@ rules:
 - apiGroups: ["apps.nvidia.com"]
   resources: ["nimservices"]
   verbs: ["get", "list", "watch"]
+# kubernetes-sigs/lws multi-host groups (Design 003 §2). Same absent-CRD behavior.
+- apiGroups: ["leaderworkerset.x-k8s.io"]
+  resources: ["leaderworkersets"]
+  verbs: ["get", "list", "watch"]
 # AIBOMs are controller-owned: full lifecycle including stale-report cleanup.
 - apiGroups: ["aibom.k8saibom.dev"]
   resources: ["aiboms"]
