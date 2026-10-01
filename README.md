@@ -27,7 +27,7 @@ k8s-aibom produces that evidence as a side effect of normal cluster operation. I
 
 k8s-aibom recognizes workload kinds across the AI lifecycle and applies category-specific scrapers to extract relevant attributes.
 
-**Inference services.** Deployments, StatefulSets, DaemonSets, KServe `InferenceService` and NVIDIA Dynamo `DynamoGraphDeployment` resources serving model inference. The controller detects the serving runtime (vLLM, Hugging Face TGI, NVIDIA Triton, Ollama, Ray Serve, llm-d, SGLang, LMDeploy, HuggingFace TEI), the container image and resolved digest, and the claimed model identity from container args, environment variables, mounted volume sources, or workload annotations.
+**Inference services.** Deployments, StatefulSets, DaemonSets, KServe `InferenceService`, NVIDIA Dynamo `DynamoGraphDeployment` and NVIDIA NIM Operator `NIMService` resources serving model inference. The controller detects the serving runtime (vLLM, Hugging Face TGI, NVIDIA Triton, Ollama, Ray Serve, llm-d, SGLang, LMDeploy, HuggingFace TEI), the container image and resolved digest, and the claimed model identity from container args, environment variables, mounted volume sources, or workload annotations.
 
 **Agent stacks.** Workloads running agent frameworks (LangChain / LangGraph, AutoGen, CrewAI, Langflow, Flowise, Chainlit). The controller extracts the framework version, the external LLM API dependencies declared via environment variables (OpenAI, Anthropic, Google, Cohere), and telemetry signatures that indicate observability integration (LangSmith, LangChain tracing).
 

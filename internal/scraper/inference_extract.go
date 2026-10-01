@@ -281,12 +281,21 @@ func (s *InferenceSpecScraper) extractContainerComponentAt(specLocator string, c
 // extractEnvVarModelsAt emits ML-model-class Components for env vars whose
 // names match the configured model-env-var allowlist.
 func (s *InferenceSpecScraper) extractEnvVarModelsAt(specLocator string, c corev1.Container, init bool, idx int, cfg *InferenceConfig) []Component {
-	var out []Component
 	listKey := "containers"
 	if init {
 		listKey = "initContainers"
 	}
-	for envIdx, e := range c.Env {
+	return envVarModels(c.Env, c.Name, fmt.Sprintf("%s.%s[%d]", specLocator, listKey, idx), cfg)
+}
+
+// envVarModels is the list-level form of extractEnvVarModelsAt.
+// locatorBase is the path of the object that holds the env list.
+// containerName may be empty for CRs whose env list is not inside a
+// container (NIMService spec.env); the container.name property is then
+// omitted rather than written empty.
+func envVarModels(env []corev1.EnvVar, containerName, locatorBase string, cfg *InferenceConfig) []Component {
+	var out []Component
+	for envIdx, e := range env {
 		if !cfg.IsModelEnvVarName(e.Name) {
 			continue
 		}
@@ -294,20 +303,22 @@ func (s *InferenceSpecScraper) extractEnvVarModelsAt(specLocator string, c corev
 			// Honest extraction: empty value is not a model identity.
 			continue
 		}
+		props := map[string]string{
+			"identity.confidence": "claimed",
+			"identity.envVarName": e.Name,
+		}
+		if containerName != "" {
+			props["container.name"] = containerName
+		}
 		out = append(out, Component{
 			Type:       ComponentMLModel,
 			Name:       TruncateString(e.Value, MaxComponentNameLength),
 			Confidence: ConfidenceInferred,
 			Evidence: Evidence{
-				Source: SourceEnvVar,
-				Locator: fmt.Sprintf("%s.%s[%d].env[%d](%s)",
-					specLocator, listKey, idx, envIdx, e.Name),
+				Source:  SourceEnvVar,
+				Locator: fmt.Sprintf("%s.env[%d](%s)", locatorBase, envIdx, e.Name),
 			},
-			Properties: map[string]string{
-				"identity.confidence": "claimed",
-				"identity.envVarName": e.Name,
-				"container.name":      c.Name,
-			},
+			Properties: props,
 		})
 	}
 	return out
@@ -317,12 +328,23 @@ func (s *InferenceSpecScraper) extractEnvVarModelsAt(specLocator string, c corev
 // whose flag name matches the configured model-arg-flag allowlist. Handles
 // both `--flag value` (positional) and `--flag=value` (joined) forms.
 func (s *InferenceSpecScraper) extractArgModelsAt(specLocator string, c corev1.Container, init bool, idx int, cfg *InferenceConfig) []Component {
-	var out []Component
 	listKey := "containers"
 	if init {
 		listKey = "initContainers"
 	}
-	args := c.Args
+	return argModels(c.Args, c.Name, fmt.Sprintf("%s.%s[%d]", specLocator, listKey, idx), cfg)
+}
+
+// argModels is the list-level form of extractArgModelsAt; see
+// envVarModels for the locatorBase / containerName conventions.
+func argModels(args []string, containerName, locatorBase string, cfg *InferenceConfig) []Component {
+	var out []Component
+	withContainer := func(props map[string]string) map[string]string {
+		if containerName != "" {
+			props["container.name"] = containerName
+		}
+		return props
+	}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		// --flag=value form
@@ -335,15 +357,13 @@ func (s *InferenceSpecScraper) extractArgModelsAt(specLocator string, c corev1.C
 					Name:       TruncateString(value, MaxComponentNameLength),
 					Confidence: ConfidenceDeclared,
 					Evidence: Evidence{
-						Source: SourceContainerArg,
-						Locator: fmt.Sprintf("%s.%s[%d].args[%d](%s=)",
-							specLocator, listKey, idx, i, flag),
+						Source:  SourceContainerArg,
+						Locator: fmt.Sprintf("%s.args[%d](%s=)", locatorBase, i, flag),
 					},
-					Properties: map[string]string{
+					Properties: withContainer(map[string]string{
 						"identity.confidence": "claimed",
 						"identity.argFlag":    flag,
-						"container.name":      c.Name,
-					},
+					}),
 				})
 			}
 			continue
@@ -359,15 +379,13 @@ func (s *InferenceSpecScraper) extractArgModelsAt(specLocator string, c corev1.C
 				Name:       TruncateString(value, MaxComponentNameLength),
 				Confidence: ConfidenceDeclared,
 				Evidence: Evidence{
-					Source: SourceContainerArg,
-					Locator: fmt.Sprintf("%s.%s[%d].args[%d %d](%s)",
-						specLocator, listKey, idx, i, i+1, arg),
+					Source:  SourceContainerArg,
+					Locator: fmt.Sprintf("%s.args[%d %d](%s)", locatorBase, i, i+1, arg),
 				},
-				Properties: map[string]string{
+				Properties: withContainer(map[string]string{
 					"identity.confidence": "claimed",
 					"identity.argFlag":    arg,
-					"container.name":      c.Name,
-				},
+				}),
 			})
 			i++ // consume value
 		}

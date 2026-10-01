@@ -41,6 +41,10 @@ rules:
 - apiGroups: ["nvidia.com"]
   resources: ["dynamographdeployments"]
   verbs: ["get", "list", "watch"]
+# NVIDIA NIM Operator services (Design 003 §1). Same absent-CRD behavior.
+- apiGroups: ["apps.nvidia.com"]
+  resources: ["nimservices"]
+  verbs: ["get", "list", "watch"]
 # AIBOMs are controller-owned: full lifecycle including stale-report cleanup.
 - apiGroups: ["aibom.k8saibom.dev"]
   resources: ["aiboms"]

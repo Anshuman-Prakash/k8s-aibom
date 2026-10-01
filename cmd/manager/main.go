@@ -272,6 +272,10 @@ func main() {
 	// templates through the shared inference extraction (Design 003 §4).
 	dynamoBase := inferenceBase
 	dynamoBase.Scraper = scraper.NewDynamoGraphDeploymentScraper(sigVerifier)
+	// NIMService: the kind itself is a declared runtime; image, storage,
+	// env/args and the NIM image-path model derivation (Design 003 §1).
+	nimBase := inferenceBase
+	nimBase.Scraper = scraper.NewNIMServiceScraper(sigVerifier)
 
 	if err := (&controller.DeploymentReconciler{WorkloadReconciler: inferenceBase}).SetupWithManager(mgr); err != nil {
 		log.Error(err, "unable to set up DeploymentReconciler")
@@ -310,6 +314,17 @@ func main() {
 		log.Info("nvidia.com/v1beta1 DynamoGraphDeployment CRD not found; skipping Dynamo controller registration")
 	} else {
 		log.Error(err, "failed to query RESTMapper for DynamoGraphDeployment")
+		os.Exit(1)
+	}
+	if _, err := mgr.GetRESTMapper().RESTMapping(schema.GroupKind{Group: "apps.nvidia.com", Kind: "NIMService"}, "v1alpha1"); err == nil {
+		if err := (&controller.NIMServiceReconciler{WorkloadReconciler: nimBase}).SetupWithManager(mgr); err != nil {
+			log.Error(err, "unable to set up NIMServiceReconciler")
+			os.Exit(1)
+		}
+	} else if meta.IsNoMatchError(err) {
+		log.Info("apps.nvidia.com/v1alpha1 NIMService CRD not found; skipping NIMService controller registration")
+	} else {
+		log.Error(err, "failed to query RESTMapper for NIMService")
 		os.Exit(1)
 	}
 

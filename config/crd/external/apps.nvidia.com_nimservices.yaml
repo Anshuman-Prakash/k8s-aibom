@@ -1,0 +1,146 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# ⚠ TEST-ONLY CRD. ⚠
+#
+# Real clusters install the NVIDIA NIM Operator's full CRD via its Helm
+# chart. This minimal version exists solely so envtest can validate
+# NIMService creation against a schema scoped to the fields k8s-aibom
+# extracts. Do NOT apply this file to a real cluster — it will conflict
+# with the real CRD and strip fields the operator expects.
+#
+# The fields this CRD explicitly schemas are (Design 003 §1):
+#   - spec.image.{repository,tag}        (both required upstream)
+#   - spec.env[], spec.args[]
+#   - spec.storage.{nimCache{name,profile}, pvc{name,...}, hostPath, emptyDir}
+#   - spec.multiNode.{backendType, parallelism{tensor,pipeline}}
+#   - spec.inferencePlatform
+#
+# Everything else is permitted via x-kubernetes-preserve-unknown-fields.
+# v1alpha1 is the operator's only served version; the controller is
+# pinned to it — see docs/external-crd-versions.md.
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: nimservices.apps.nvidia.com
+  annotations:
+    api-approved.kubernetes.io: "unapproved, k8s-aibom test fixture (minimal subset)"
+spec:
+  group: apps.nvidia.com
+  scope: Namespaced
+  names:
+    plural: nimservices
+    singular: nimservice
+    kind: NIMService
+    listKind: NIMServiceList
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+              required:
+                - image
+              properties:
+                image:
+                  type: object
+                  required:
+                    - repository
+                    - tag
+                  properties:
+                    repository:
+                      type: string
+                      maxLength: 2048
+                    tag:
+                      type: string
+                      maxLength: 253
+                    pullPolicy:
+                      type: string
+                env:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                    properties:
+                      name:
+                        type: string
+                      value:
+                        type: string
+                args:
+                  type: array
+                  items:
+                    type: string
+                command:
+                  type: array
+                  items:
+                    type: string
+                inferencePlatform:
+                  type: string
+                storage:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  properties:
+                    nimCache:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        profile:
+                          type: string
+                    pvc:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                      properties:
+                        name:
+                          type: string
+                        create:
+                          type: boolean
+                    hostPath:
+                      type: string
+                    emptyDir:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    readOnly:
+                      type: boolean
+                multiNode:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  properties:
+                    backendType:
+                      type: string
+                    parallelism:
+                      type: object
+                      properties:
+                        tensor:
+                          type: integer
+                        pipeline:
+                          type: integer
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true

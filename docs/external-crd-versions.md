@@ -115,6 +115,45 @@ here is six field paths plus PodTemplateSpecs, which decode through
 `runtime.DefaultUnstructuredConverter` into `corev1` types already in
 the dependency graph.
 
+### NVIDIA NIM Operator `apps.nvidia.com/v1alpha1.NIMService`
+
+**Scraper:** `internal/scraper/nimservice.go` (`NIMServiceScraper`,
+`Name() = "inference.nimservice"`) — Design 003 §1.
+
+**Reconciler:** `internal/controller/nimservice_controller.go`
+
+**Field paths the scraper reads** (from `spec`):
+
+| Path | Used as |
+|---|---|
+| the CR kind itself | Runtime application Component `nim`, **declared** (locator `kind`): the customer chose NIM serving |
+| `spec.image.repository`, `spec.image.tag` | Container Component (`image.reference` = `repository:tag`). Digest, and therefore container confidence, only when the repository is digest-pinned — container confidence means digest provenance everywhere in this codebase, so a tag-only reference is `unresolved` exactly as on a Deployment whose pods are not listed |
+| `spec.env[]`, `spec.args[]` | ML-model Components through the existing env-name / arg-flag allowlists (`NIM_MODEL_NAME`, `NIM_SERVED_MODEL_NAME`, `--model`, …); locators `spec.env[i](NAME)`, `spec.args[i](--flag)`; no `container.name` property (there is no container at that path) |
+| `nvcr.io/nim/<org>/<name>` image path | ML-model Component `<org>/<name>`, **inferred**, **only when nothing is declared** via env, args or annotations. Valid solely because NIM publishes one model per image (Design 003 open question 3, resolved on AICR review). Exact, case-sensitive prefix; exactly two path segments |
+| `spec.storage.{nimCache{name,profile}, pvc.name, hostPath, emptyDir}` | `nim.storage.*` properties on the runtime Component and on every model Component; `nim.storage.kind` lists the shapes present, sorted. The NIMCache's contents are never resolved (non-goal 3) |
+| `spec.multiNode.{backendType, parallelism.tensor, parallelism.pipeline}`, `spec.inferencePlatform` | `nim.multiNode*` / `nim.inferencePlatform` properties on the runtime Component |
+| `metadata.annotations` (`model.k8saibom.dev/*`) | Additional ML-model Components (count as declared for the image-path rule); signature claims (Design 002) |
+
+**Not read:** `status.*` (incl. `status.model`, which is the operator's
+own conclusion, not customer input); `spec.initContainers` /
+`spec.sidecarContainers` (operator-injected helpers); pods. Pod-status
+digests arrive with the Design 003 §3 ownership roll-up (NIMService →
+Deployment / LeaderWorkerSet → Pod).
+
+**Test-only minimal CRD:** [`config/crd/external/apps.nvidia.com_nimservices.yaml`](../config/crd/external/apps.nvidia.com_nimservices.yaml)
+
+**Upgrade obligations.** `v1alpha1` is the operator's only served
+version today. A `v1alpha2`/`v1beta1` requires the same explicit work
+as KServe: extend `nimServiceHandledKinds`, keep `inference.nimservice`
+as the historical scraper identity, fork to `inference.nimservice.<suffix>`
+if field paths move. If NVIDIA ever publishes NIM images outside
+`nvcr.io/nim/`, or more than one model per image, the image-path
+derivation must be revisited — it is correct only under both facts.
+
+**Why no NIM Operator Go module dependency.** Seven field paths plus
+`[]corev1.EnvVar`, decoded through `runtime.DefaultUnstructuredConverter`
+into types already in the dependency graph.
+
 ## Process for adding a new external CRD
 
 When a future phase adds a scraper for another project's CRD (llm-d,

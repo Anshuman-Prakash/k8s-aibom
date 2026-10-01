@@ -34,8 +34,8 @@ of external review), the output sanitization guarantee, the
 - **CRD workload scrapers: Dynamo, NIMService, LeaderWorkerSet** —
   [Design 003](design/003-nimservice-lws-scrapers.md) merged
   2026-10-01 after the open review window. Implementation order
-  follows the AICR-review ranking: the `DynamoGraphDeployment`
-  scraper is on main; NIMService and LeaderWorkerSet, then the §3
+  follows the AICR-review ranking: the `DynamoGraphDeployment` and
+  `NIMService` scrapers are on main; LeaderWorkerSet, then the §3
   ownership roll-up (shared with CronJob), follow on the same train.
 - **Complete CronJob coverage** — wire the watcher and RBAC for the
   existing CronJob scraper path.
