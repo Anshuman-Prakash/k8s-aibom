@@ -8,6 +8,20 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ### Added
 
+- **NVIDIA Dynamo `DynamoGraphDeployment` scraper** (Design 003 §4;
+  v1.6 coverage release). One AIBOM per graph, keyed to the DGD.
+  `spec.backendFramework` becomes a **declared** runtime (`trtllm`
+  recorded as `tensorrt-llm` to match the image-pattern name);
+  `spec.components[i].modelRef` becomes a **declared** model attributed
+  to its component; component `type` is recorded as graph topology;
+  every component and role `podTemplate` goes through the shared
+  inference extraction with locators rooted at the component path.
+  No model identity is ever derived from Dynamo image paths (Dynamo
+  images carry no model). Registered only when the CRD is present;
+  RBAC adds get/list/watch on `dynamographdeployments.nvidia.com`.
+  Pod-status digests and the DGD → component → pod ownership roll-up
+  follow in the §3 change.
+
 - **`kubectl aibom find`** — the incident command: filter tracked
   workloads by `--runtime` (exact), `--model` (case-sensitive
   substring), `--image` (substring of the container reference),

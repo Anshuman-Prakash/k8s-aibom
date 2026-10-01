@@ -196,19 +196,38 @@ func (s *InferenceSpecScraper) Scrape(ctx context.Context, w Workload, cfg *Infe
 // extraction path. cfg flows from Scrape() and is passed unchanged to
 // every helper.
 func (s *InferenceSpecScraper) scrapePodSpec(inputs *BOMInputs, spec *corev1.PodSpec, podTemplateAnnotations map[string]string, pods []corev1.Pod, cfg *InferenceConfig) {
+	s.scrapePodSpecAt(inputs, spec, podTemplateAnnotations, pods, cfg,
+		defaultPodSpecLocator, defaultPodTemplateAnnotationsLocator)
+}
+
+// Default evidence-locator roots for kinds whose pod template lives at
+// spec.template (Deployment, StatefulSet, DaemonSet). Scrapers for CRDs
+// that embed pod templates elsewhere (Dynamo components, LWS roles)
+// pass their own roots to scrapePodSpecAt so every locator names the
+// real path in the CR. Changing these strings changes shipped BOM
+// bytes for the apps/v1 kinds.
+const (
+	defaultPodSpecLocator                = "spec.template.spec"
+	defaultPodTemplateAnnotationsLocator = "spec.template.metadata.annotations"
+)
+
+// scrapePodSpecAt is scrapePodSpec with explicit evidence-locator roots:
+// specLocator is the path of the PodSpec within the workload object and
+// annotationsLocator the path of the pod template's annotations.
+func (s *InferenceSpecScraper) scrapePodSpecAt(inputs *BOMInputs, spec *corev1.PodSpec, podTemplateAnnotations map[string]string, pods []corev1.Pod, cfg *InferenceConfig, specLocator, annotationsLocator string) {
 	for i, c := range spec.Containers {
 		inputs.Components = append(inputs.Components,
-			s.extractContainerComponent(c, false, i, pods, cfg)...)
+			s.extractContainerComponentAt(specLocator, c, false, i, pods, cfg)...)
 		inputs.Components = append(inputs.Components,
-			s.extractEnvVarModels(c, false, i, cfg)...)
+			s.extractEnvVarModelsAt(specLocator, c, false, i, cfg)...)
 		inputs.Components = append(inputs.Components,
-			s.extractArgModels(c, false, i, cfg)...)
+			s.extractArgModelsAt(specLocator, c, false, i, cfg)...)
 		inputs.Components = append(inputs.Components,
-			s.extractVolumeMountModels(c, spec.Volumes, false, i, cfg)...)
+			s.extractVolumeMountModelsAt(specLocator, c, spec.Volumes, false, i, cfg)...)
 	}
 	for i, c := range spec.InitContainers {
 		inputs.Components = append(inputs.Components,
-			s.extractContainerComponent(c, true, i, pods, cfg)...)
+			s.extractContainerComponentAt(specLocator, c, true, i, pods, cfg)...)
 		// Per "honest, not clever": init containers' env vars and args
 		// are NOT scraped for model claims in v1. Init containers
 		// typically don't serve models; treating their args/env as model
@@ -217,7 +236,7 @@ func (s *InferenceSpecScraper) scrapePodSpec(inputs *BOMInputs, spec *corev1.Pod
 	}
 	inputs.Components = append(inputs.Components,
 		extractAnnotationModels(podTemplateAnnotations,
-			SourcePodTemplateAnnotation, "spec.template.metadata.annotations")...)
+			SourcePodTemplateAnnotation, annotationsLocator)...)
 }
 
 // sortComponents orders components deterministically. The order is:

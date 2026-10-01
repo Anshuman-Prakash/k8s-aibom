@@ -36,6 +36,11 @@ rules:
 - apiGroups: ["serving.kserve.io"]
   resources: ["inferenceservices"]
   verbs: ["get", "list", "watch"]
+# NVIDIA Dynamo graphs (Design 003 §4). Harmless when the CRD is absent:
+# the controller skips the watch at startup.
+- apiGroups: ["nvidia.com"]
+  resources: ["dynamographdeployments"]
+  verbs: ["get", "list", "watch"]
 # AIBOMs are controller-owned: full lifecycle including stale-report cleanup.
 - apiGroups: ["aibom.k8saibom.dev"]
   resources: ["aiboms"]

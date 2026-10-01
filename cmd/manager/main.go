@@ -268,6 +268,10 @@ func main() {
 	// ConfigStore reference) is preserved.
 	kserveBase := inferenceBase
 	kserveBase.Scraper = scraper.NewKServeInferenceServiceScraper(sigVerifier)
+	// Dynamo likewise: declared backend/modelRef plus per-component pod
+	// templates through the shared inference extraction (Design 003 §4).
+	dynamoBase := inferenceBase
+	dynamoBase.Scraper = scraper.NewDynamoGraphDeploymentScraper(sigVerifier)
 
 	if err := (&controller.DeploymentReconciler{WorkloadReconciler: inferenceBase}).SetupWithManager(mgr); err != nil {
 		log.Error(err, "unable to set up DeploymentReconciler")
@@ -295,6 +299,17 @@ func main() {
 		log.Info("serving.kserve.io/v1beta1 InferenceService CRD not found; skipping KServe controller registration")
 	} else {
 		log.Error(err, "failed to query RESTMapper for InferenceService")
+		os.Exit(1)
+	}
+	if _, err := mgr.GetRESTMapper().RESTMapping(schema.GroupKind{Group: "nvidia.com", Kind: "DynamoGraphDeployment"}, "v1beta1"); err == nil {
+		if err := (&controller.DynamoGraphDeploymentReconciler{WorkloadReconciler: dynamoBase}).SetupWithManager(mgr); err != nil {
+			log.Error(err, "unable to set up DynamoGraphDeploymentReconciler")
+			os.Exit(1)
+		}
+	} else if meta.IsNoMatchError(err) {
+		log.Info("nvidia.com/v1beta1 DynamoGraphDeployment CRD not found; skipping Dynamo controller registration")
+	} else {
+		log.Error(err, "failed to query RESTMapper for DynamoGraphDeployment")
 		os.Exit(1)
 	}
 

@@ -134,6 +134,8 @@ func startEnvTest(t *testing.T) *envTestEnv {
 	// KServe needs its own scraper; everything else shared.
 	kserveBase := inferenceBase
 	kserveBase.Scraper = scraper.NewKServeInferenceServiceScraper(nil)
+	dynamoBase := inferenceBase
+	dynamoBase.Scraper = scraper.NewDynamoGraphDeploymentScraper(nil)
 
 	if err := (&DeploymentReconciler{WorkloadReconciler: inferenceBase}).SetupWithManager(mgr); err != nil {
 		t.Fatalf("SetupWithManager DeploymentReconciler: %v", err)
@@ -149,6 +151,9 @@ func startEnvTest(t *testing.T) *envTestEnv {
 	}
 	if err := (&KServeInferenceServiceReconciler{WorkloadReconciler: kserveBase}).SetupWithManager(mgr); err != nil {
 		t.Fatalf("SetupWithManager KServeInferenceServiceReconciler: %v", err)
+	}
+	if err := (&DynamoGraphDeploymentReconciler{WorkloadReconciler: dynamoBase}).SetupWithManager(mgr); err != nil {
+		t.Fatalf("SetupWithManager DynamoGraphDeploymentReconciler: %v", err)
 	}
 
 	mgrCtx, mgrCancel := context.WithCancel(context.Background())
