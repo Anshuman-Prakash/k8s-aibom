@@ -99,10 +99,30 @@ Pod) lands.
 
 **Test-only minimal CRD:** [`config/crd/external/nvidia.com_dynamographdeployments.yaml`](../config/crd/external/nvidia.com_dynamographdeployments.yaml) — serves `v1beta1` only.
 
-**Upgrade obligations.** `v1beta1` is the operator's storage version;
-`v1alpha1` is served with conversion and is NOT handled (its CRs convert
-to `v1beta1` on read, so the watch still sees them in `v1beta1` shape).
-A `v1` or breaking `v1beta2` requires the same explicit work as KServe:
+**Deployed-version facts (from the AICR maintainer, 2026-10-01).**
+AICR pins dynamo-platform **1.4.2** (operator image
+`nvcr.io/nvidia/ai-dynamo/kubernetes-operator:1.4.2`) since AICR
+v0.21.0; v0.20.0 shipped 1.2.1. In both, `DynamoGraphDeployment` and
+`DynamoComponentDeployment` serve `v1alpha1` **and** `v1beta1`;
+`v1alpha1` is deprecated **but still `storage: true`**, and conversion
+is `Webhook`, served by the Dynamo operator. The shapes differ
+(`v1alpha1`: `spec.services` map keyed by service name; `v1beta1`:
+`spec.components` list; `modelRef` on each entry and top-level
+`backendFramework` in both). Everything AICR creates itself uses
+`v1beta1`.
+
+**Consequences.** The controller reads `v1beta1` only and never decodes
+the `v1alpha1` shape; the API server converts stored objects on read
+(Design 003 open question 4: closed, no `v1alpha1` fixtures). That
+makes every Dynamo list/get depend on the Dynamo operator's conversion
+webhook being reachable. A down or uninstalled operator with DGDs left
+behind must surface as a condition, never as zero AIBOMs — tracked in
+[#127](https://github.com/GoogleCloudPlatform/k8s-aibom/issues/127),
+which also carries the failed-conversion fixture.
+
+**Upgrade obligations.** When the operator flips storage to `v1beta1`
+nothing changes here. A `v1` or breaking `v1beta2` requires the same
+explicit work as KServe:
 extend `dynamoHandledKinds`, keep `inference.dynamo` as the historical
 scraper identity, fork to `inference.dynamo.<suffix>` if field paths
 move. A new `backendFramework` enum value is recorded verbatim until

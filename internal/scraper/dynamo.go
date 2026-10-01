@@ -27,10 +27,13 @@ import (
 )
 
 // dynamoHandledKinds enumerates the WorkloadKinds this scraper handles.
-// Pinned to nvidia.com/v1beta1.DynamoGraphDeployment (the operator's
-// storage version; v1alpha1 is served with conversion). See
-// docs/external-crd-versions.md for the pinning policy and Design 003
-// §4 for the extraction map.
+// Pinned to nvidia.com/v1beta1.DynamoGraphDeployment. In the operator
+// versions shipped today (dynamo-platform 1.2–1.4) the STORAGE version
+// is still the deprecated v1alpha1 and every v1beta1 read goes through
+// the Dynamo operator's conversion webhook; this scraper never decodes
+// the v1alpha1 shape (spec.services map). See
+// docs/external-crd-versions.md for the pinning policy, Design 003 §4
+// for the extraction map, and #127 for the conversion-failure gap.
 var dynamoHandledKinds = []WorkloadKind{
 	{Group: "nvidia.com", Version: "v1beta1", Kind: "DynamoGraphDeployment"},
 }
