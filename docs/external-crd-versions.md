@@ -69,6 +69,52 @@ the godoc on `KServeInferenceServiceScraper` for details on how
 the transition to v2 (to resolve container image digests by traversing
 down to managed Pods) is triggered.
 
+### NVIDIA Dynamo `nvidia.com/v1beta1.DynamoGraphDeployment`
+
+**Scraper:** `internal/scraper/dynamo.go` (`DynamoGraphDeploymentScraper`,
+`Name() = "inference.dynamo"`) — Design 003 §4.
+
+**Reconciler:** `internal/controller/dynamo_controller.go`
+
+**Field paths the scraper reads** (from `spec`):
+
+| Path | Used as |
+|---|---|
+| `spec.backendFramework` (enum `sglang` \| `vllm` \| `trtllm`) | Runtime application Component, **declared**; `trtllm` is recorded as runtime `tensorrt-llm` so it matches the pattern table's name for the same runtime image |
+| `spec.components[i].name`, `spec.components[i].type` | `dynamo.component.name` / `dynamo.component.type` properties on every Component extracted from that graph component; graph topology recorded as `dynamo.component.<name>.type` on the runtime Component. Roles never imply models |
+| `spec.components[i].modelRef.{name,revision}` | ML-model Component, **declared**, attributed to its component (`model.revision` when set) |
+| `spec.components[i].podTemplate` | Full PodTemplateSpec through the shared inference extraction (images, env/arg allowlists, volume mounts, template annotations); locators rooted at `spec.components[i].podTemplate.spec` |
+| `spec.components[i].roles[j].{name,podTemplate}` | Same, rooted at `spec.components[i].roles[j].podTemplate.spec`, plus `dynamo.role.name` |
+| `metadata.annotations` (`model.k8saibom.dev/*`) | Additional ML-model Components; signature claims (Design 002) |
+
+**Binding rule (AICR review of Design 003):** no model identity is
+derived from Dynamo image paths. Dynamo runtime images carry no model;
+absent `modelRef` and declared env/args the model stays `unresolved`.
+
+**Not read:** `status.*`; `spec.env` (graph-wide env — a follow-up if a
+consumer shows a model declared there); pods. Digests resolve only from
+digest-pinned image references until the Design 003 §3 ownership
+roll-up (DGD → DynamoComponentDeployment → Deployment / LWS / Grove →
+Pod) lands.
+
+**Test-only minimal CRD:** [`config/crd/external/nvidia.com_dynamographdeployments.yaml`](../config/crd/external/nvidia.com_dynamographdeployments.yaml) — serves `v1beta1` only.
+
+**Upgrade obligations.** `v1beta1` is the operator's storage version;
+`v1alpha1` is served with conversion and is NOT handled (its CRs convert
+to `v1beta1` on read, so the watch still sees them in `v1beta1` shape).
+A `v1` or breaking `v1beta2` requires the same explicit work as KServe:
+extend `dynamoHandledKinds`, keep `inference.dynamo` as the historical
+scraper identity, fork to `inference.dynamo.<suffix>` if field paths
+move. A new `backendFramework` enum value is recorded verbatim until
+`dynamoBackendRuntimes` maps it. A new `type` enum value needs no code
+change (recorded verbatim).
+
+**Why no dynamo Go module dependency.** The operator module pulls in
+gateway-api-inference-extension and the Grove APIs; the read surface
+here is six field paths plus PodTemplateSpecs, which decode through
+`runtime.DefaultUnstructuredConverter` into `corev1` types already in
+the dependency graph.
+
 ## Process for adding a new external CRD
 
 When a future phase adds a scraper for another project's CRD (llm-d,

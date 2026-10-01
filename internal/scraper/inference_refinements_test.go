@@ -378,7 +378,7 @@ func TestExtractContainerComponent_NameAndVersionTruncated(t *testing.T) {
 	longName := strings.Repeat("a", MaxComponentNameLength+50)
 	longTag := strings.Repeat("b", MaxComponentNameLength+50)
 	c := corev1.Container{Name: "x", Image: longName + ":" + longTag}
-	comps := s.extractContainerComponent(c, false, 0, nil, testConfig())
+	comps := s.extractContainerComponentAt(defaultPodSpecLocator, c, false, 0, nil, testConfig())
 	if len(comps) == 0 {
 		t.Fatal("no component extracted")
 	}

@@ -194,19 +194,19 @@ func normalizeImageName(name string) string {
 	return strings.TrimPrefix(name, "library/")
 }
 
-// extractContainerComponent produces a container-class Component for a
+// extractContainerComponentAt produces a container-class Component for a
 // single container in the workload's pod spec, including digest resolution
 // and (if the image matches a configured runtime pattern) a sibling
 // application-class Component identifying the runtime.
 //
 // Returns one or two Components: always the container; optionally the
 // runtime application Component.
-func (s *InferenceSpecScraper) extractContainerComponent(c corev1.Container, init bool, idx int, pods []corev1.Pod, cfg *InferenceConfig) []Component {
+func (s *InferenceSpecScraper) extractContainerComponentAt(specLocator string, c corev1.Container, init bool, idx int, pods []corev1.Pod, cfg *InferenceConfig) []Component {
 	name, tag, digestFromSpec := parseImageRef(c.Image)
 
-	containerLocatorBase := fmt.Sprintf("spec.template.spec.containers[%d]", idx)
+	containerLocatorBase := fmt.Sprintf("%s.containers[%d]", specLocator, idx)
 	if init {
-		containerLocatorBase = fmt.Sprintf("spec.template.spec.initContainers[%d]", idx)
+		containerLocatorBase = fmt.Sprintf("%s.initContainers[%d]", specLocator, idx)
 	}
 
 	digest, digestSource := digestFromSpec, SourceImageReference
@@ -278,9 +278,9 @@ func (s *InferenceSpecScraper) extractContainerComponent(c corev1.Container, ini
 	return result
 }
 
-// extractEnvVarModels emits ML-model-class Components for env vars whose
+// extractEnvVarModelsAt emits ML-model-class Components for env vars whose
 // names match the configured model-env-var allowlist.
-func (s *InferenceSpecScraper) extractEnvVarModels(c corev1.Container, init bool, idx int, cfg *InferenceConfig) []Component {
+func (s *InferenceSpecScraper) extractEnvVarModelsAt(specLocator string, c corev1.Container, init bool, idx int, cfg *InferenceConfig) []Component {
 	var out []Component
 	listKey := "containers"
 	if init {
@@ -300,8 +300,8 @@ func (s *InferenceSpecScraper) extractEnvVarModels(c corev1.Container, init bool
 			Confidence: ConfidenceInferred,
 			Evidence: Evidence{
 				Source: SourceEnvVar,
-				Locator: fmt.Sprintf("spec.template.spec.%s[%d].env[%d](%s)",
-					listKey, idx, envIdx, e.Name),
+				Locator: fmt.Sprintf("%s.%s[%d].env[%d](%s)",
+					specLocator, listKey, idx, envIdx, e.Name),
 			},
 			Properties: map[string]string{
 				"identity.confidence": "claimed",
@@ -313,10 +313,10 @@ func (s *InferenceSpecScraper) extractEnvVarModels(c corev1.Container, init bool
 	return out
 }
 
-// extractArgModels emits ML-model-class Components for container args
+// extractArgModelsAt emits ML-model-class Components for container args
 // whose flag name matches the configured model-arg-flag allowlist. Handles
 // both `--flag value` (positional) and `--flag=value` (joined) forms.
-func (s *InferenceSpecScraper) extractArgModels(c corev1.Container, init bool, idx int, cfg *InferenceConfig) []Component {
+func (s *InferenceSpecScraper) extractArgModelsAt(specLocator string, c corev1.Container, init bool, idx int, cfg *InferenceConfig) []Component {
 	var out []Component
 	listKey := "containers"
 	if init {
@@ -336,8 +336,8 @@ func (s *InferenceSpecScraper) extractArgModels(c corev1.Container, init bool, i
 					Confidence: ConfidenceDeclared,
 					Evidence: Evidence{
 						Source: SourceContainerArg,
-						Locator: fmt.Sprintf("spec.template.spec.%s[%d].args[%d](%s=)",
-							listKey, idx, i, flag),
+						Locator: fmt.Sprintf("%s.%s[%d].args[%d](%s=)",
+							specLocator, listKey, idx, i, flag),
 					},
 					Properties: map[string]string{
 						"identity.confidence": "claimed",
@@ -360,8 +360,8 @@ func (s *InferenceSpecScraper) extractArgModels(c corev1.Container, init bool, i
 				Confidence: ConfidenceDeclared,
 				Evidence: Evidence{
 					Source: SourceContainerArg,
-					Locator: fmt.Sprintf("spec.template.spec.%s[%d].args[%d %d](%s)",
-						listKey, idx, i, i+1, arg),
+					Locator: fmt.Sprintf("%s.%s[%d].args[%d %d](%s)",
+						specLocator, listKey, idx, i, i+1, arg),
 				},
 				Properties: map[string]string{
 					"identity.confidence": "claimed",
@@ -375,11 +375,11 @@ func (s *InferenceSpecScraper) extractArgModels(c corev1.Container, init bool, i
 	return out
 }
 
-// extractVolumeMountModels emits data-class Components for volume mounts
+// extractVolumeMountModelsAt emits data-class Components for volume mounts
 // whose paths match the configured model-volume-path allowlist. The
 // Component identifies the underlying volume source (PVC name, configMap
 // name, hostPath path, or a generic source-type label for other kinds).
-func (s *InferenceSpecScraper) extractVolumeMountModels(c corev1.Container, volumes []corev1.Volume, init bool, idx int, cfg *InferenceConfig) []Component {
+func (s *InferenceSpecScraper) extractVolumeMountModelsAt(specLocator string, c corev1.Container, volumes []corev1.Volume, init bool, idx int, cfg *InferenceConfig) []Component {
 	var out []Component
 	listKey := "containers"
 	if init {
@@ -396,8 +396,8 @@ func (s *InferenceSpecScraper) extractVolumeMountModels(c corev1.Container, volu
 			Confidence: ConfidenceInferred,
 			Evidence: Evidence{
 				Source: SourceVolumeSource,
-				Locator: fmt.Sprintf("spec.template.spec.%s[%d].volumeMounts[%d](%s -> %s)",
-					listKey, idx, mIdx, m.Name, m.MountPath),
+				Locator: fmt.Sprintf("%s.%s[%d].volumeMounts[%d](%s -> %s)",
+					specLocator, listKey, idx, mIdx, m.Name, m.MountPath),
 			},
 			Properties: map[string]string{
 				"volume.name":      m.Name,

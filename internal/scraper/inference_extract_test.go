@@ -477,7 +477,7 @@ func TestExtractEnvVarModelsNIMNames(t *testing.T) {
 			{Name: "NIM_SERVED_MODEL_NAME", Value: "qwen3"},
 		},
 	}
-	comps := s.extractEnvVarModels(c, false, 0, cfg)
+	comps := s.extractEnvVarModelsAt(defaultPodSpecLocator, c, false, 0, cfg)
 	if len(comps) != 2 {
 		t.Fatalf("want 2 model components from NIM_* env vars, got %d: %+v", len(comps), comps)
 	}
