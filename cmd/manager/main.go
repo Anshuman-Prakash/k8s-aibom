@@ -276,6 +276,10 @@ func main() {
 	// env/args and the NIM image-path model derivation (Design 003 §1).
 	nimBase := inferenceBase
 	nimBase.Scraper = scraper.NewNIMServiceScraper(sigVerifier)
+	// LeaderWorkerSet: both pod templates through the shared extraction,
+	// with template-rooted locators and lws.role (Design 003 §2).
+	lwsBase := inferenceBase
+	lwsBase.Scraper = scraper.NewLeaderWorkerSetScraper(sigVerifier)
 
 	if err := (&controller.DeploymentReconciler{WorkloadReconciler: inferenceBase}).SetupWithManager(mgr); err != nil {
 		log.Error(err, "unable to set up DeploymentReconciler")
@@ -325,6 +329,17 @@ func main() {
 		log.Info("apps.nvidia.com/v1alpha1 NIMService CRD not found; skipping NIMService controller registration")
 	} else {
 		log.Error(err, "failed to query RESTMapper for NIMService")
+		os.Exit(1)
+	}
+	if _, err := mgr.GetRESTMapper().RESTMapping(schema.GroupKind{Group: "leaderworkerset.x-k8s.io", Kind: "LeaderWorkerSet"}, "v1"); err == nil {
+		if err := (&controller.LeaderWorkerSetReconciler{WorkloadReconciler: lwsBase}).SetupWithManager(mgr); err != nil {
+			log.Error(err, "unable to set up LeaderWorkerSetReconciler")
+			os.Exit(1)
+		}
+	} else if meta.IsNoMatchError(err) {
+		log.Info("leaderworkerset.x-k8s.io/v1 LeaderWorkerSet CRD not found; skipping LeaderWorkerSet controller registration")
+	} else {
+		log.Error(err, "failed to query RESTMapper for LeaderWorkerSet")
 		os.Exit(1)
 	}
 

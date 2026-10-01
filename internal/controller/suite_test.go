@@ -138,6 +138,8 @@ func startEnvTest(t *testing.T) *envTestEnv {
 	dynamoBase.Scraper = scraper.NewDynamoGraphDeploymentScraper(nil)
 	nimBase := inferenceBase
 	nimBase.Scraper = scraper.NewNIMServiceScraper(nil)
+	lwsBase := inferenceBase
+	lwsBase.Scraper = scraper.NewLeaderWorkerSetScraper(nil)
 
 	if err := (&DeploymentReconciler{WorkloadReconciler: inferenceBase}).SetupWithManager(mgr); err != nil {
 		t.Fatalf("SetupWithManager DeploymentReconciler: %v", err)
@@ -159,6 +161,9 @@ func startEnvTest(t *testing.T) *envTestEnv {
 	}
 	if err := (&NIMServiceReconciler{WorkloadReconciler: nimBase}).SetupWithManager(mgr); err != nil {
 		t.Fatalf("SetupWithManager NIMServiceReconciler: %v", err)
+	}
+	if err := (&LeaderWorkerSetReconciler{WorkloadReconciler: lwsBase}).SetupWithManager(mgr); err != nil {
+		t.Fatalf("SetupWithManager LeaderWorkerSetReconciler: %v", err)
 	}
 
 	mgrCtx, mgrCancel := context.WithCancel(context.Background())

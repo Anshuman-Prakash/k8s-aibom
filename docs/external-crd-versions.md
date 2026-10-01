@@ -154,6 +154,41 @@ derivation must be revisited — it is correct only under both facts.
 `[]corev1.EnvVar`, decoded through `runtime.DefaultUnstructuredConverter`
 into types already in the dependency graph.
 
+### kubernetes-sigs/lws `leaderworkerset.x-k8s.io/v1.LeaderWorkerSet`
+
+**Scraper:** `internal/scraper/lws.go` (`LeaderWorkerSetScraper`,
+`Name() = "inference.lws"`) — Design 003 §2.
+
+**Reconciler:** `internal/controller/lws_controller.go`
+
+**Field paths the scraper reads** (from `spec`):
+
+| Path | Used as |
+|---|---|
+| `spec.leaderWorkerTemplate.leaderTemplate` (optional) | Full PodTemplateSpec through the shared inference extraction; locators rooted at `spec.leaderWorkerTemplate.leaderTemplate.spec`; every resulting Component carries `lws.role: leader` |
+| `spec.leaderWorkerTemplate.workerTemplate` (required upstream) | Same, rooted at `…workerTemplate.spec`, `lws.role: worker` |
+| `spec.leaderWorkerTemplate.size`, `spec.replicas` | `lws.size` / `lws.replicas` properties on container Components (omitted when unset) |
+| `metadata.annotations` (`model.k8saibom.dev/*`) | Additional ML-model Components; signature claims (Design 002), with each template's annotations as fallback |
+
+There is no declared-runtime row: an LWS declares nothing about what it
+runs, so runtime attribution is image-pattern **inferred** exactly as
+for a StatefulSet. One AIBOM per LWS, keyed to the LWS UID; the
+StatefulSets it materializes roll up under Design 003 §3.
+
+**Not read:** `status.*`, `subGroupPolicy`, `networkConfig`,
+`rolloutStrategy`, `volumeClaimTemplates`; pods (digests resolve only
+from digest-pinned references until §3).
+
+**Test-only minimal CRD:** [`config/crd/external/leaderworkerset.x-k8s.io_leaderworkersets.yaml`](../config/crd/external/leaderworkerset.x-k8s.io_leaderworkersets.yaml)
+
+**Upgrade obligations.** `v1` is the only served version. A `v2`
+requires extending `lwsHandledKinds`; keep `inference.lws` as the
+historical identity. If a future version moves the templates out of
+`spec.leaderWorkerTemplate`, the locator roots must move with them.
+
+**Why no lws Go module dependency.** Two PodTemplateSpecs and two
+integers, decoded into `corev1` types already in the dependency graph.
+
 ## Process for adding a new external CRD
 
 When a future phase adds a scraper for another project's CRD (llm-d,

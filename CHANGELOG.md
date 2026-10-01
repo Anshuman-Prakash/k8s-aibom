@@ -8,6 +8,18 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ### Added
 
+- **`LeaderWorkerSet` scraper** (Design 003 §2; v1.6 coverage release).
+  One AIBOM per LWS, keyed to the LWS UID. Both the optional leader
+  template and the required worker template go through the shared
+  inference extraction with locators rooted at
+  `spec.leaderWorkerTemplate.{leader,worker}Template`, an `lws.role`
+  property on every extracted component, and `lws.size` /
+  `lws.replicas` on container components. Nothing is declared by an
+  LWS, so runtime attribution is image-pattern inferred as for a
+  StatefulSet. Registered only when the CRD is present; RBAC adds
+  get/list/watch on `leaderworkersets.leaderworkerset.x-k8s.io`.
+  The StatefulSets an LWS materializes roll up in the §3 change.
+
 - **NVIDIA NIM Operator `NIMService` scraper** (Design 003 §1; v1.6
   coverage release). One AIBOM per NIMService. The kind itself is a
   **declared** runtime (`nim`); `spec.image` becomes the container
