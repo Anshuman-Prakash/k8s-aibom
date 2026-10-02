@@ -63,6 +63,12 @@ func (r *NIMServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// Design 005: the workloads and pods this CR owns, transitively.
+	owned, pods := r.rootDescendants(ctx, u)
+	if pods == nil {
+		pods = []corev1.Pod{}
+	}
+
 	workload := scraper.Workload{
 		Kind:      scraper.WorkloadKind{Group: "apps.nvidia.com", Version: "v1alpha1", Kind: "NIMService"},
 		Category:  scraper.CategoryInference,
@@ -70,7 +76,7 @@ func (r *NIMServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		Name:      u.GetName(),
 		UID:       u.GetUID(),
 		Object:    u,
-		Pods:      []corev1.Pod{},
+		Pods:      pods,
 	}
 	return r.reconcileWorkload(ctx, WorkloadReconcileRequest{
 		Workload:  workload,
@@ -97,6 +103,7 @@ func (r *NIMServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			WorkloadCategory:   string(scraper.CategoryInference),
 		},
 		Generation: u.GetGeneration(),
+		Owned:      owned,
 	})
 }
 

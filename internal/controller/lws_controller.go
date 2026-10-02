@@ -62,6 +62,12 @@ func (r *LeaderWorkerSetReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// Design 005: the workloads and pods this CR owns, transitively.
+	owned, pods := r.rootDescendants(ctx, u)
+	if pods == nil {
+		pods = []corev1.Pod{}
+	}
+
 	workload := scraper.Workload{
 		Kind:      scraper.WorkloadKind{Group: "leaderworkerset.x-k8s.io", Version: "v1", Kind: "LeaderWorkerSet"},
 		Category:  scraper.CategoryInference,
@@ -69,7 +75,7 @@ func (r *LeaderWorkerSetReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		Name:      u.GetName(),
 		UID:       u.GetUID(),
 		Object:    u,
-		Pods:      []corev1.Pod{},
+		Pods:      pods,
 	}
 	return r.reconcileWorkload(ctx, WorkloadReconcileRequest{
 		Workload:  workload,
@@ -96,6 +102,7 @@ func (r *LeaderWorkerSetReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			WorkloadCategory:   string(scraper.CategoryInference),
 		},
 		Generation: u.GetGeneration(),
+		Owned:      owned,
 	})
 }
 

@@ -62,6 +62,28 @@ Watching a third-party CRD installed *after* the controller starts
 still requires a restart; the presence check at startup decides which
 kinds the supervisor runs.
 
+## Ownership roll-up (Design 005)
+
+One workload, one AIBOM. A tracked workload owned, directly or
+transitively via controller `ownerReferences`, by another tracked kind
+(the apps/v1 and batch kinds plus every third-party kind the supervisor
+runs) is not separately reported. The owner's document records each
+absorbed workload as `aibom.rollup.owned.<i>` (`Kind/name`, sorted) and
+receives the descendants' pods, which is how the CRD kinds resolve
+pod-status digests. Attribution is ownership only: Dynamo's pod labels
+exist but are never consulted, because a tenant pod can carry a label
+and cannot forge an `ownerReference` to an object it does not control.
+
+The upward walk from a child is bounded (six hops) and reads each owner
+once as unstructured. An owner the controller cannot read — missing
+RBAC, CRD absent, deleted — ends the walk as *unresolved* and the child
+is reported as before (`rollup_unresolved` outcome); coverage never
+regresses because of a permission. Roots list their descendants from
+cache-backed typed lists plus live lists of the intermediate CRD kinds
+that are present: `DynamoComponentDeployment` and the Grove pod-owning
+kinds `PodCliqueSet`, `PodCliqueScalingGroup`, `PodClique`
+(`grove.io/v1alpha1`; read-only, never watched).
+
 ## Pinned CRDs
 
 ### KServe `serving.kserve.io/v1beta1.InferenceService`
@@ -136,10 +158,15 @@ derived from Dynamo image paths. Dynamo runtime images carry no model;
 absent `modelRef` and declared env/args the model stays `unresolved`.
 
 **Not read:** `status.*`; `spec.env` (graph-wide env — a follow-up if a
-consumer shows a model declared there); pods. Digests resolve only from
-digest-pinned image references until the Design 003 §3 ownership
-roll-up (DGD → DynamoComponentDeployment → Deployment / LWS / Grove →
-Pod) lands.
+consumer shows a model declared there). Pods are reached through the
+ownership roll-up (DGD → DynamoComponentDeployment → Deployment / LWS /
+Grove → Pod), so pod-status digests resolve as for a Deployment.
+
+**`DynamoComponentDeployment` (same group/version)** is handled by the
+same scraper: a component with no graph parent is its own root, read as
+a one-component graph with locators rooted at `spec`; a component owned
+by a graph is absorbed into the graph's document and never scraped on
+its own.
 
 **Test-only minimal CRD:** [`config/crd/external/nvidia.com_dynamographdeployments.yaml`](../config/crd/external/nvidia.com_dynamographdeployments.yaml) — serves `v1beta1` only.
 

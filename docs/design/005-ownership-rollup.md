@@ -1,6 +1,9 @@
 # Design 005: Ownership roll-up for CRD-owned workloads (+ CronJob, pod digests for CRD kinds)
 
-Status: Draft, 2026-10-02. Implements Design 003 §3; tracks #126.
+Status: Draft, 2026-10-02 (implementation note: a Pod source maps pod
+create/delete/digest events to the owning root through the chain, so
+the owner's document follows its descendants' pods without the
+children re-triggering it). Implements Design 003 §3; tracks #126.
 Targets the v1.6 train; on the critical path for the AICR
 Dynamo-pairing qualification (without it, every Dynamo graph reports
 one AIBOM for the graph plus one per component Deployment). Review
@@ -90,8 +93,9 @@ Root kinds (`DynamoGraphDeployment`, `NIMService`, `LeaderWorkerSet`,
   `PodClique`, `PodCliqueScalingGroup`). Descendants are the closure
   under that map from the root UID.
 - **Recorded**: each descendant that is a tracked kind becomes a
-  metadata property `aibom.rollup.owned` = `<Kind>/<name>` (one
-  property per descendant, sorted; deterministic). Nothing silently
+  metadata property `aibom.rollup.owned.<i>` = `<Kind>/<name>` (one
+  indexed property per descendant, sorted by kind then name;
+  deterministic; same indexing convention as `aibom.scrape.<i>`). Nothing silently
   disappears: the suppressed identities are on the owner's document.
 - **Pods**: pods in the namespace whose controller-owner chain reaches
   the root UID are passed as `Workload.Pods`, so the existing
