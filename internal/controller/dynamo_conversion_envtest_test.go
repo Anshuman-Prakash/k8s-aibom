@@ -204,9 +204,17 @@ func aibomExists(c client.Client, ctx context.Context, key types.NamespacedName)
 	return c.Get(ctx, key, &a) == nil && a.Status.Summary != nil
 }
 
+// observation is what startAndObserve saw within its window.
+type observation struct {
+	deployAIBOM bool  // the unrelated Deployment got an AIBOM
+	exited      bool  // the manager returned from Start
+	err         error // what Start returned, when exited
+}
+
 // startAndObserve starts the manager and reports whether the Deployment
-// AIBOM appeared and whether/why the manager exited within window.
-func (e *webhookExperiment) startAndObserve(t *testing.T, ns string, window time.Duration) (deployAIBOM bool, mgrErr error, exited bool, cancel func()) {
+// AIBOM appeared and whether/why the manager exited within window. The
+// returned cancel stops the manager if it is still running.
+func (e *webhookExperiment) startAndObserve(t *testing.T, ns string, window time.Duration) (observation, func()) {
 	t.Helper()
 	mgrCtx, c := context.WithCancel(e.ctx)
 	errCh := make(chan error, 1)
@@ -214,16 +222,18 @@ func (e *webhookExperiment) startAndObserve(t *testing.T, ns string, window time
 	go func() { errCh <- e.mgr.Start(mgrCtx) }()
 	deployKey := types.NamespacedName{Name: AIBOMNameForWorkload("apps", "Deployment", "vllm"), Namespace: ns}
 	deadline := time.After(window)
+	var obs observation
 	for {
 		select {
 		case err := <-errCh:
 			t.Logf("manager exited after %s: %v", time.Since(start).Round(100*time.Millisecond), err)
-			return deployAIBOM, err, true, c
+			obs.exited, obs.err = true, err
+			return obs, c
 		case <-deadline:
-			return deployAIBOM, nil, false, func() { c(); <-errCh }
+			return obs, func() { c(); <-errCh }
 		case <-time.After(250 * time.Millisecond):
-			if !deployAIBOM && aibomExists(e.cfgClient, e.ctx, deployKey) {
-				deployAIBOM = true
+			if !obs.deployAIBOM && aibomExists(e.cfgClient, e.ctx, deployKey) {
+				obs.deployAIBOM = true
 				t.Logf("Deployment AIBOM created after %s", time.Since(start).Round(100*time.Millisecond))
 			}
 		}
@@ -239,12 +249,12 @@ func TestIntegration_DynamoConversion_Control(t *testing.T) {
 	mustCreate(t, e.cfgClient, e.ctx, dgdAt("v1alpha1", ns, "stored-alpha"))
 	mustCreate(t, e.cfgClient, e.ctx, expVllmDeployment(ns, "vllm"))
 
-	deploy, mgrErr, exited, cancel := e.startAndObserve(t, ns, 20*time.Second)
+	obs, cancel := e.startAndObserve(t, ns, 20*time.Second)
 	defer cancel()
 	dgdOK := aibomExists(e.cfgClient, e.ctx, types.NamespacedName{Name: AIBOMNameForWorkload("nvidia.com", "DynamoGraphDeployment", "stored-alpha"), Namespace: ns})
-	t.Logf("RESULT control: managerExited=%v err=%v deploymentAIBOM=%v dgdAIBOM(from stored v1alpha1, converted by None)=%v", exited, mgrErr, deploy, dgdOK)
-	if exited || !deploy || !dgdOK {
-		t.Errorf("control must be healthy: exited=%v deploy=%v dgd=%v", exited, deploy, dgdOK)
+	t.Logf("RESULT control: managerExited=%v err=%v deploymentAIBOM=%v dgdAIBOM(from stored v1alpha1, converted by None)=%v", obs.exited, obs.err, obs.deployAIBOM, dgdOK)
+	if obs.exited || !obs.deployAIBOM || !dgdOK {
+		t.Errorf("control must be healthy: exited=%v deploy=%v dgd=%v", obs.exited, obs.deployAIBOM, dgdOK)
 	}
 }
 
@@ -263,9 +273,9 @@ func TestIntegration_DynamoConversion_WebhookDownAtStartup(t *testing.T) {
 	err := e.cfgClient.List(e.ctx, beta, client.InNamespace(ns))
 	t.Logf("direct v1beta1 list: err=%v", err)
 
-	deploy, mgrErr, exited, cancel := e.startAndObserve(t, ns, 30*time.Second)
+	obs, cancel := e.startAndObserve(t, ns, 30*time.Second)
 	defer cancel()
-	t.Logf("RESULT webhook-down-at-startup: managerExited=%v err=%v deploymentAIBOM=%v", exited, mgrErr, deploy)
+	t.Logf("RESULT webhook-down-at-startup: managerExited=%v err=%v deploymentAIBOM=%v", obs.exited, obs.err, obs.deployAIBOM)
 }
 
 // Runtime case: healthy start, then the webhook dies and a new DGD is
@@ -279,11 +289,11 @@ func TestIntegration_DynamoConversion_WebhookDiesAfterStartup(t *testing.T) {
 	mustCreate(t, e.cfgClient, e.ctx, dgdAt("v1alpha1", ns, "early"))
 	mustCreate(t, e.cfgClient, e.ctx, expVllmDeployment(ns, "vllm"))
 
-	deploy, _, exited, cancel := e.startAndObserve(t, ns, 15*time.Second)
+	obs, cancel := e.startAndObserve(t, ns, 15*time.Second)
 	defer cancel()
 	earlyKey := types.NamespacedName{Name: AIBOMNameForWorkload("nvidia.com", "DynamoGraphDeployment", "early"), Namespace: ns}
-	if exited || !deploy || !aibomExists(e.cfgClient, e.ctx, earlyKey) {
-		t.Fatalf("healthy phase failed: exited=%v deploy=%v early=%v", exited, deploy, aibomExists(e.cfgClient, e.ctx, earlyKey))
+	if obs.exited || !obs.deployAIBOM || !aibomExists(e.cfgClient, e.ctx, earlyKey) {
+		t.Fatalf("healthy phase failed: exited=%v deploy=%v early=%v", obs.exited, obs.deployAIBOM, aibomExists(e.cfgClient, e.ctx, earlyKey))
 	}
 
 	// Webhook dies; a new graph appears at the storage version.
