@@ -18,6 +18,14 @@ pinned API. They are NOT a substitute for the real CRDs in
 production. Each file's header comment carries an explicit
 "do-not-apply-to-real-clusters" warning.
 
+## Invariant: read-only toward third-party CRDs
+
+k8s-aibom never applies, patches or ships any CRD it does not own. The
+minimal CRDs under `config/crd/external/` exist so envtest can create
+real-shape CRs; each file carries a do-not-apply warning. In a real
+cluster the controller only reads third-party CRs, and registers a
+watch for a kind only when its CRD is already present.
+
 ## Pinned CRDs
 
 ### KServe `serving.kserve.io/v1beta1.InferenceService`
@@ -120,8 +128,21 @@ behind must surface as a condition, never as zero AIBOMs — tracked in
 [#127](https://github.com/GoogleCloudPlatform/k8s-aibom/issues/127),
 which also carries the failed-conversion fixture.
 
-**Upgrade obligations.** When the operator flips storage to `v1beta1`
-nothing changes here. A `v1` or breaking `v1beta2` requires the same
+**Dynamo 1.5 (per the Dynamo maintainers, 2026-10-02):** storage
+switches to `v1beta1`; it was left at `v1alpha1` in earlier releases
+intentionally, to allow operator downgrades. Nothing changes here when
+that happens — `v1beta1` reads simply stop crossing the conversion
+webhook, which narrows the #127 exposure to clusters running operators
+≤ 1.4 (AICR's current pin).
+
+**k8s-aibom never applies, patches or ships third-party CRDs.** The
+files under `config/crd/external/` are envtest fixtures only (each
+carries a do-not-apply warning); the controller reads third-party CRs
+through the dynamic client and applies nothing but its own CRDs.
+Operator upgrade/downgrade expectations around a project's CRDs belong
+to that project.
+
+**Upgrade obligations.** A `v1` or breaking `v1beta2` requires the same
 explicit work as KServe:
 extend `dynamoHandledKinds`, keep `inference.dynamo` as the historical
 scraper identity, fork to `inference.dynamo.<suffix>` if field paths
