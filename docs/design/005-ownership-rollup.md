@@ -1,9 +1,11 @@
 # Design 005: Ownership roll-up for CRD-owned workloads (+ CronJob, pod digests for CRD kinds)
 
-Status: Draft, 2026-10-02 (implementation note: a Pod source maps pod
-create/delete/digest events to the owning root through the chain, so
-the owner's document follows its descendants' pods without the
-children re-triggering it). Implements Design 003 §3; tracks #126.
+Status: Draft, 2026-10-02; chain table and UID rule revised 2026-10-05
+after Dynamo/Grove maintainer review on the PR. Implementation note: a
+Pod source maps pod create/delete/digest events to the owning root
+through the chain, so the owner's document follows its descendants'
+pods without the children re-triggering it. Implements Design 003 §3;
+tracks #126.
 Targets the v1.6 train; on the critical path for the AICR
 Dynamo-pairing qualification (without it, every Dynamo graph reports
 one AIBOM for the graph plus one per component Deployment). Review
@@ -19,7 +21,7 @@ operators behind them materialize ordinary workloads the controller
 
 | Root | Materializes (observed) |
 |---|---|
-| `DynamoGraphDeployment` | `DynamoComponentDeployment` per component → `Deployment` \| `LeaderWorkerSet` \| Grove `PodCliqueSet`/`PodClique` (multi-node) → Pods |
+| `DynamoGraphDeployment` | Deployment/LWS provider: `DynamoComponentDeployment` per component → `Deployment` → `ReplicaSet` → Pods, or → `LeaderWorkerSet` → `StatefulSet` → Pods. Grove provider: `PodCliqueSet` **owned directly by the graph** (no DCD in between) → `PodClique` → Pods, or → `PodCliqueScalingGroup` → `PodClique` → Pods. Alternative paths, not all present in one graph |
 | `NIMService` | `Deployment` \| `LeaderWorkerSet` → Pods |
 | `LeaderWorkerSet` | `StatefulSet` per group → Pods |
 | `CronJob` (not watched today) | `Job` → Pods |
@@ -67,8 +69,14 @@ resolves the workload's **tracked owner**:
   every third-party kind handed to the supervisor at startup (present
   CRDs, regardless of current watch health, so suppression is stable
   through an outage).
+- **Every hop validates identity**: the fetched owner's `metadata.uid`
+  must equal the reference's `uid`, or the edge is rejected. Resolving by
+  apiVersion/kind/name alone would let a lingering child attach to an
+  owner re-created under the same name (Dynamo's own Grove ownership
+  walk applies the same check). The descendant closure (§2) matches on
+  UID for the same reason.
 - Stop with **no tracked owner** at a root (no controller owner), or
-  when a hop fails with NotFound, Forbidden or NoMatch: an intermediate
+  when a hop fails with NotFound, Forbidden, NoMatch or a UID mismatch: an intermediate
   kind we cannot read is treated as an untracked owner and the
   workload is **reported as today**. Coverage never regresses because
   of a missing permission; the miss is counted and logged once per
@@ -90,8 +98,14 @@ Root kinds (`DynamoGraphDeployment`, `NIMService`, `LeaderWorkerSet`,
   cache-backed typed lists (`Deployment`, `ReplicaSet`, `StatefulSet`,
   `Job`) plus live unstructured lists of the intermediate CRD kinds
   that are present (`DynamoComponentDeployment`; Grove `PodCliqueSet`,
-  `PodClique`, `PodCliqueScalingGroup`). Descendants are the closure
-  under that map from the root UID.
+  `PodCliqueScalingGroup`, `PodClique`). Descendants are the closure
+  under that map from the root UID. Both Grove shapes resolve without
+  special-casing: `PodCliqueSet → PodClique` and `PodCliqueSet →
+  PodCliqueScalingGroup → PodClique`. Grove kinds are walk-only
+  intermediates: not tracked, never listed in `aibom.rollup.owned`.
+  `PodGangMap` and `ClusterTopologyBinding` describe gang composition
+  and topology bindings, not ownership, and are not in the walk
+  (confirmed by the Dynamo/Grove maintainers).
 - **Recorded**: each descendant that is a tracked kind becomes a
   metadata property `aibom.rollup.owned.<i>` = `<Kind>/<name>` (one
   indexed property per descendant, sorted by kind then name;
@@ -147,6 +161,12 @@ graph. DCDs owned by a graph are suppressed under §1. RBAC:
   1 and hop 3; untracked root; Forbidden/NotFound/NoMatch mid-walk;
   depth cap; descendants closure and pod attribution through
   `ReplicaSet` and through an unstructured intermediate.
+- Envtest, Grove: both ownership shapes built parent-first against
+  minimal test-only `grove.io` CRDs (direct clique, and scaling group),
+  each resolving the worker pod's digest onto the graph; an unrelated
+  pod carrying the graph-name label but a foreign chain is excluded; an
+  owner re-created with the same name and a different UID does not
+  adopt the stale child.
 - Envtest: `LeaderWorkerSet` → `StatefulSet` (StatefulSet produces no
   AIBOM, its prior AIBOM is deleted, the LWS document lists it and
   resolves a digest from the StatefulSet's pod status);
@@ -169,5 +189,8 @@ child AIBOMs disappear on upgrade for the four chains above.
    `Kind/name` (stable across recreate vs. readable)? Proposal: name
    only in the property, UID in a sibling `aibom.rollup.owned.uid`
    only if a consumer asks.
-2. Grove `PodGangMap` and `ClusterTopologyBinding` are not in the walk;
-   they do not own pods. Confirm with the Dynamo/Grove reviewers.
+2. ~~Grove `PodGangMap` and `ClusterTopologyBinding` are not in the walk;
+   they do not own pods. Confirm with the Dynamo/Grove reviewers.~~
+   Confirmed on the PR by the Dynamo/Grove side (2026-10-05): neither
+   sits between a root and its pods; scheduling relationships are not
+   ownership edges.
