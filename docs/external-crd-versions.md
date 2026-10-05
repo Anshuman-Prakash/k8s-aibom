@@ -82,7 +82,13 @@ regresses because of a permission. Roots list their descendants from
 cache-backed typed lists plus live lists of the intermediate CRD kinds
 that are present: `DynamoComponentDeployment` and the Grove pod-owning
 kinds `PodCliqueSet`, `PodCliqueScalingGroup`, `PodClique`
-(`grove.io/v1alpha1`; read-only, never watched).
+(`grove.io/v1alpha1`; read-only, never watched). Under Grove the
+`PodCliqueSet` is owned directly by the graph, and both
+`PodCliqueSet → PodClique` and `PodCliqueSet → PodCliqueScalingGroup →
+PodClique` resolve; Grove kinds never appear in `aibom.rollup.owned`.
+Every hop validates the fetched owner's UID against the reference, so
+an owner re-created under the same name cannot adopt a stale child.
+Minimal test-only Grove CRDs live under `config/crd/external/`.
 
 ## Pinned CRDs
 

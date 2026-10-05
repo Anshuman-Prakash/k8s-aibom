@@ -116,8 +116,10 @@ const (
 // and reports whether a tracked kind owns it. Each hop is one live Get
 // of the owner as unstructured, using the reference's own
 // apiVersion/kind/name, so no typed dependency on any intermediate
-// kind is needed. Objects with no controller owner — the overwhelming
-// majority of Deployments — return immediately with no request.
+// kind is needed, and every hop — the final tracked owner included —
+// is identity-checked by UID. Objects with no controller owner — the
+// overwhelming majority of Deployments — return immediately with no
+// request.
 func resolveTrackedOwner(ctx context.Context, c client.Client, obj client.Object, tracked *TrackedKinds) (*OwnedWorkload, ownerOutcome, error) {
 	if tracked == nil {
 		return nil, ownerNone, nil
@@ -133,10 +135,9 @@ func resolveTrackedOwner(ctx context.Context, c client.Client, obj client.Object
 		if err != nil {
 			return nil, ownerUnresolved, fmt.Errorf("owner %s/%s apiVersion %q: %w", ref.Kind, ref.Name, ref.APIVersion, err)
 		}
-		gk := schema.GroupKind{Group: gv.Group, Kind: ref.Kind}
-		if tracked.Has(gk) {
-			return &OwnedWorkload{Kind: ref.Kind, Name: ref.Name, UID: ref.UID}, ownerTracked, nil
-		}
+		// Every hop is fetched and identity-checked, including the final
+		// tracked owner: a reference's name alone would let a lingering
+		// child attach to an owner re-created under the same name.
 		next := &unstructured.Unstructured{}
 		next.SetGroupVersionKind(gv.WithKind(ref.Kind))
 		if err := c.Get(ctx, types.NamespacedName{Namespace: ns, Name: ref.Name}, next); err != nil {
@@ -147,9 +148,12 @@ func resolveTrackedOwner(ctx context.Context, c client.Client, obj client.Object
 		}
 		if next.GetUID() != ref.UID {
 			// A re-created object with the same name: the reference is
-			// dangling. Treat as unresolved; the next reconcile sees the
-			// stable state.
-			return nil, ownerUnresolved, fmt.Errorf("owner %s/%s uid changed", ref.Kind, ref.Name)
+			// stale. Not this owner; report the child as a root until the
+			// controller that owns it re-parents it.
+			return nil, ownerUnresolved, fmt.Errorf("owner %s/%s uid %s does not match reference %s", ref.Kind, ref.Name, next.GetUID(), ref.UID)
+		}
+		if tracked.Has(schema.GroupKind{Group: gv.Group, Kind: ref.Kind}) {
+			return &OwnedWorkload{Kind: ref.Kind, Name: ref.Name, UID: ref.UID}, ownerTracked, nil
 		}
 		cur = next
 	}

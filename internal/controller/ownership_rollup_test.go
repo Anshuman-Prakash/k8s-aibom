@@ -95,6 +95,10 @@ func TestResolveTrackedOwner(t *testing.T) {
 		{"tracked owner through an untracked intermediate (hop 2)", dep("g", ownerRefTo("grove.io/v1alpha1", "PodClique", "clique", "uid-clique")), rollupTracked(), ownerTracked, "DynamoComponentDeployment/worker"},
 		{"owner kind not readable (no such object) → unresolved", dep("u", ownerRefTo("foo.example.com/v1", "Widget", "w", "uid-w")), rollupTracked(), ownerUnresolved, ""},
 		{"dangling uid → unresolved", dep("d", ownerRefTo("grove.io/v1alpha1", "PodClique", "clique", "uid-other")), rollupTracked(), ownerUnresolved, ""},
+		// The final tracked owner is identity-checked too: same name, new UID.
+		{"tracked owner re-created (uid mismatch) → unresolved", dep("s", ownerRefTo("nvidia.com/v1beta1", "DynamoComponentDeployment", "worker", "uid-stale")), rollupTracked(), ownerUnresolved, ""},
+		// A tracked owner that no longer exists at all.
+		{"tracked owner deleted → unresolved", dep("x2", ownerRefTo("nvidia.com/v1beta1", "DynamoComponentDeployment", "gone", "uid-gone")), rollupTracked(), ownerUnresolved, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

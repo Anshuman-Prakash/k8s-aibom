@@ -38,7 +38,9 @@ All notable changes to k8s-aibom are documented here. The format follows
   `ownerReferences` — by another tracked kind no longer gets its own
   AIBOM; the owner's document is the report. Covered chains:
   `DynamoGraphDeployment` → `DynamoComponentDeployment` → `Deployment` |
-  `LeaderWorkerSet` | Grove `PodCliqueSet`/`PodClique`; `NIMService` →
+  `LeaderWorkerSet`, and `DynamoGraphDeployment` → Grove `PodCliqueSet`
+  → [`PodCliqueScalingGroup` →] `PodClique` (the PodCliqueSet is owned
+  directly by the graph); `NIMService` →
   `Deployment` | `LeaderWorkerSet`; `LeaderWorkerSet` → `StatefulSet`;
   `CronJob` → `Job`. The owner's document lists what it absorbed as
   `aibom.rollup.owned.<i>` (`Kind/name`, sorted) and receives the
