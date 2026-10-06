@@ -44,6 +44,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -254,6 +255,16 @@ func main() {
 	// patterns, sinks, namespace selector, and inline threshold is a
 	// property of the rotating Snapshot — no field on the reconciler
 	// holds config-derived state.
+	// Kinds this process reports on (Design 005): a workload owned by
+	// any of these is rolled up into the owner's document.
+	tracked := controller.NewTrackedKinds()
+	for _, gk := range []schema.GroupKind{
+		{Group: "apps", Kind: "Deployment"}, {Group: "apps", Kind: "StatefulSet"}, {Group: "apps", Kind: "DaemonSet"},
+		{Group: "batch", Kind: "Job"}, {Group: "batch", Kind: "CronJob"},
+	} {
+		tracked.Add(gk)
+	}
+
 	inferenceBase := controller.WorkloadReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
@@ -264,6 +275,7 @@ func main() {
 		ConfigStore:       configStore,
 		ControllerName:    "k8s-aibom",
 		ControllerVersion: controllerVersion,
+		Tracked:           tracked,
 	}
 	// KServe needs its own scraper (declared-not-inferred semantics,
 	// different field paths). Shallow-copy the inference base and
@@ -301,17 +313,22 @@ func main() {
 		log.Error(err, "unable to set up JobReconciler")
 		os.Exit(1)
 	}
+	if err := (&controller.CronJobReconciler{WorkloadReconciler: inferenceBase}).SetupWithManager(mgr); err != nil {
+		log.Error(err, "unable to set up CronJobReconciler")
+		os.Exit(1)
+	}
 	// Third-party kinds run under the WatchSupervisor (Design 004): each
 	// on its own cache, never on the manager's, so a CRD that is present
 	// but unservable (a Dynamo conversion webhook whose operator is down)
 	// degrades that kind only — visible on AIBOMControllerConfig's
 	// Degraded condition, an event and aibom_watch_healthy — instead of
 	// failing every controller's cache sync and exiting the process.
-	if err := controller.RegisterThirdPartyWatches(mgr, watchHealth,
+	if err := controller.RegisterThirdPartyWatches(mgr, watchHealth, tracked,
 		mgr.GetEventRecorderFor("k8s-aibom"), controllerPod, //nolint:staticcheck
 		[]controller.ThirdPartyWatch{
 			(&controller.KServeInferenceServiceReconciler{WorkloadReconciler: kserveBase}).Watch(),
 			(&controller.DynamoGraphDeploymentReconciler{WorkloadReconciler: dynamoBase}).Watch(),
+			(&controller.DynamoComponentDeploymentReconciler{WorkloadReconciler: dynamoBase}).Watch(),
 			(&controller.NIMServiceReconciler{WorkloadReconciler: nimBase}).Watch(),
 			(&controller.LeaderWorkerSetReconciler{WorkloadReconciler: lwsBase}).Watch(),
 		}, nil); err != nil {

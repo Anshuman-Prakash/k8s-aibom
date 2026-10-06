@@ -234,6 +234,14 @@ func (s *WatchSupervisor) runOnce(ctx context.Context, w ThirdPartyWatch, log lo
 		predicate.GenerationChangedPredicate{})); err != nil {
 		return fmt.Errorf("watch AIBOM for %s: %w", w.Name, err)
 	}
+	// Pods the root owns transitively (Design 005): digest changes in
+	// a Dynamo worker pod re-reconcile the graph, not just the pod's
+	// Deployment (which is rolled up and produces nothing itself).
+	if err := c.Watch(source.Kind(s.SharedCache, client.Object(&corev1.Pod{}),
+		handler.EnqueueRequestsFromMapFunc(w.Base.EnqueueRootForPod(schema.GroupKind{Group: w.GVK.Group, Kind: w.GVK.Kind})),
+		PodImageIDChangedPredicate())); err != nil {
+		return fmt.Errorf("watch Pod for %s: %w", w.Name, err)
+	}
 	if err := c.Watch(source.Kind(s.SharedCache, client.Object(&corev1.Namespace{}),
 		handler.EnqueueRequestsFromMapFunc(w.Base.EnqueueWorkloadsForNamespace(
 			unstructuredListFactory(w.GVK), unstructuredListItems)),
@@ -349,7 +357,7 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 // present into one WatchSupervisor and adds it to the manager. Kinds
 // whose CRD is absent are skipped with a log line, as before. Shared by
 // cmd/manager and the envtest harness so both exercise the same path.
-func RegisterThirdPartyWatches(mgr ctrl.Manager, health *WatchHealth, recorder record.EventRecorder, controllerPod *corev1.ObjectReference, candidates []ThirdPartyWatch, tune func(*WatchSupervisor)) error {
+func RegisterThirdPartyWatches(mgr ctrl.Manager, health *WatchHealth, tracked *TrackedKinds, recorder record.EventRecorder, controllerPod *corev1.ObjectReference, candidates []ThirdPartyWatch, tune func(*WatchSupervisor)) error {
 	log := ctrl.Log.WithName("setup")
 	var present []ThirdPartyWatch
 	for _, w := range candidates {
@@ -357,6 +365,9 @@ func RegisterThirdPartyWatches(mgr ctrl.Manager, health *WatchHealth, recorder r
 		switch {
 		case err == nil:
 			present = append(present, w)
+			if tracked != nil {
+				tracked.Add(schema.GroupKind{Group: w.GVK.Group, Kind: w.GVK.Kind})
+			}
 		case meta.IsNoMatchError(err):
 			log.Info("CRD not found; skipping watch", "kind", w.Name, "gvk", w.GVK.String())
 		default:
