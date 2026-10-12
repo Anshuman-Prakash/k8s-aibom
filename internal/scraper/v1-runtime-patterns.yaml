@@ -31,6 +31,7 @@ runtimeImagePatterns:
     pattern: '^vllm/.*'
   - runtime: vllm
     pattern: '^ghcr\.io/[a-zA-Z0-9.\-_]+/vllm[a-zA-Z0-9.\-_]*(?:[:@]|$)'
+
   # AMD ROCm builds of vLLM — rocm/ is AMD's own Docker Hub publisher
   # namespace, so this is a publisher's-own-registry case (like TGI on
   # GHCR), not a mirror. Matches the tag form (rocm/vllm:<tag>), the
@@ -42,6 +43,7 @@ runtimeImagePatterns:
     pattern: '^rocm/vllm(?:[:@/]|$)'
   - runtime: tgi
     pattern: '^huggingface/text-generation-inference.*'
+
   # TGI's GHCR form was a deliberately preserved false negative pending
   # real deployment signal (see the registry-prefix note below); that
   # signal arrived — ghcr.io-published TGI observed running with no
@@ -53,13 +55,28 @@ runtimeImagePatterns:
     pattern: '^nvcr\.io/nvidia/tritonserver.*'
   - runtime: ollama
     pattern: '^ollama/ollama.*'
+
   # ray-serve — Ray's own Docker Hub images. The optional -ml suffix
   # covers KubeRay serve samples (rayproject/ray-ml); bounded at the
   # image-name boundary so other rayproject/ray-* names stay unmatched.
   - runtime: ray-serve
     pattern: '^(?:.*/)?rayproject/ray(?:-ml)?(?:[:@]|$)'
+
+  # llm-d — Kubernetes-native distributed inference. The org publishes
+  # both model-server images and infrastructure (endpoint picker,
+  # routing sidecar, coordinator, kv-cache-manager, autoscaler,
+  # inference-sim, …). Only the model-server names attribute as runtime
+  # llm-d: accelerator and provider variants (llm-d-cuda, llm-d-rocm,
+  # llm-d-cpu, llm-d-xpu, llm-d-xpu-sglang, llm-d-hpu, llm-d-gke,
+  # llm-d-aws, llm-d-cuda-gb200) and their -dev/-debug/-ubuntu suffixes,
+  # which stack (llm-d-cuda-dev-ubuntu). Since llm-d v0.8 the well-lit
+  # paths run upstream vllm/vllm-openai directly and v0.10.0 deprecated
+  # llm-d-cuda and llm-d-aws in its favour; those deployments already
+  # attribute as vllm, so this entry covers the org's remaining images.
+  # Infrastructure images still appear in the BOM as ordinary container
+  # components; they just carry no runtime attribution.
   - runtime: llm-d
-    pattern: '^(?:.*/)?llm-d/[a-zA-Z0-9.\-_]+(?:[:@]|$)'
+    pattern: '^(?:.*/)?llm-d/llm-d-(?:cuda-gb200|cuda|rocm|cpu|xpu-sglang|xpu|hpu|gke|aws)(?:-(?:dev|debug|ubuntu))*(?:[:@]|$)'
 
   # SGLang — LMSYS-published serving framework. Distinct namespace on
   # Docker Hub (lmsysorg/sglang); upstream tags follow semver-ish.
