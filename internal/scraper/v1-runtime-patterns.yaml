@@ -31,6 +31,7 @@ runtimeImagePatterns:
     pattern: '^vllm/.*'
   - runtime: vllm
     pattern: '^ghcr\.io/[a-zA-Z0-9.\-_]+/vllm[a-zA-Z0-9.\-_]*(?:[:@]|$)'
+
   # AMD ROCm builds of vLLM — rocm/ is AMD's own Docker Hub publisher
   # namespace, so this is a publisher's-own-registry case (like TGI on
   # GHCR), not a mirror. Matches the tag form (rocm/vllm:<tag>), the
@@ -42,6 +43,7 @@ runtimeImagePatterns:
     pattern: '^rocm/vllm(?:[:@/]|$)'
   - runtime: tgi
     pattern: '^huggingface/text-generation-inference.*'
+
   # TGI's GHCR form was a deliberately preserved false negative pending
   # real deployment signal (see the registry-prefix note below); that
   # signal arrived — ghcr.io-published TGI observed running with no
@@ -53,11 +55,13 @@ runtimeImagePatterns:
     pattern: '^nvcr\.io/nvidia/tritonserver.*'
   - runtime: ollama
     pattern: '^ollama/ollama.*'
+
   # ray-serve — Ray's own Docker Hub images. The optional -ml suffix
   # covers KubeRay serve samples (rayproject/ray-ml); bounded at the
   # image-name boundary so other rayproject/ray-* names stay unmatched.
   - runtime: ray-serve
     pattern: '^(?:.*/)?rayproject/ray(?:-ml)?(?:[:@]|$)'
+
   # llm-d — Kubernetes-native distributed inference. The org publishes
   # both model-server images and infrastructure (endpoint picker,
   # routing sidecar, coordinator, kv-cache-manager, autoscaler,
@@ -187,6 +191,18 @@ runtimeImagePatterns:
   # mirror pattern.
   - runtime: vllm
     pattern: '^us-docker\.pkg\.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve(?:[:@]|$)'
+
+  # HuggingFace server (KServe) — kserve/huggingfaceserver run as a
+  # plain Deployment. The runtime id is `huggingface`, the same name a
+  # KServe InferenceService declares in modelFormat.name for this
+  # server, so one id covers both ways of deploying it. Anchored at the
+  # image-name boundary so tag and digest forms match while KServe
+  # infrastructure images under the same org (kserve/kserve-controller,
+  # kserve/agent, kserve/router, kserve/storage-initializer),
+  # name-prefix near-misses, and other registries do not. Not a prefix
+  # and not a mirror pattern.
+  - runtime: huggingface
+    pattern: '^kserve/huggingfaceserver(?:[:@]|$)'
 
   # NOT added in Phase 11: registry-prefix matching for mirrored
   # images (Artifact Registry, ECR, private mirrors). The asymmetry

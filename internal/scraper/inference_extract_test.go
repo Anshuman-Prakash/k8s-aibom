@@ -51,6 +51,7 @@ func TestParseImageRef(t *testing.T) {
 		{"localhost:5000/p/vllm:tag", "localhost:5000/p/vllm", "tag", ""},
 		{"localhost:5000/vllm", "localhost:5000/vllm", "", ""},
 		{"nvcr.io/nvidia/tritonserver:24.01-py3", "nvcr.io/nvidia/tritonserver", "24.01-py3", ""},
+
 		// Malformed digests: scraper drops them silently rather than
 		// passing through to fail downstream schema validation.
 		{"vllm@sha256:abc", "vllm", "", ""},                                   // too short
@@ -77,11 +78,13 @@ func TestParseImageDigest(t *testing.T) {
 	}{
 		{"", ""},
 		{"vllm", ""},
+
 		// Valid 64-char hex digests in each shape.
 		{testFullDigest, testFullDigest},
 		{"vllm@" + testFullDigest, testFullDigest},
 		{"docker-pullable://vllm@" + testFullDigest, testFullDigest},
 		{"gcr.io/p/vllm@" + testFullDigest, testFullDigest},
+
 		// Malformed: strict validation drops them so downstream schema
 		// validation never has to see them.
 		{"sha256:abc", ""},
@@ -419,6 +422,20 @@ func TestInferenceConfig_DetectRuntime(t *testing.T) {
 		{"us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve@sha256:abc", "vllm"},
 		{"us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-inference:gemma4", ""},
 		{"gcr.io/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:gemma4", ""},
+
+		// kserve/huggingfaceserver — publisher-anchored Docker Hub image
+		// run as a plain Deployment. Tag and digest forms match; KServe
+		// infrastructure images under the same org, name-prefix, and
+		// other-registry near-misses do not.
+		{"kserve/huggingfaceserver:latest", "huggingface"},
+		{"kserve/huggingfaceserver@sha256:abc", "huggingface"},
+		{"kserve/kserve-controller:latest", ""},
+		{"kserve/agent:latest", ""},
+		{"kserve/router:latest", ""},
+		{"kserve/storage-initializer:latest", ""},
+		{"kserve/huggingfaceserver-extra:1", ""},
+		{"otheruser/huggingfaceserver:latest", ""},
+		{"ghcr.io/kserve/huggingfaceserver:latest", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.image, func(t *testing.T) {
