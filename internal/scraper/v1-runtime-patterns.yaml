@@ -27,8 +27,14 @@
 # describe.
 
 runtimeImagePatterns:
+  # vLLM's own Docker Hub org. Narrowed to the model-server image
+  # families — vllm-openai (and -cpu/-rocm/-xpu), vllm-tpu, vllm-omni
+  # (and -rocm) — because the org also publishes images that execute no
+  # model: vllm/agentic-api (llm-d's OpenAI Responses API layer in front
+  # of an InferencePool), vllm/vllm-router, vllm/vime. Those stay
+  # unmatched; tag and digest forms of the servers match.
   - runtime: vllm
-    pattern: '^vllm/.*'
+    pattern: '^vllm/vllm-(?:openai|omni|tpu)(?:-[a-z0-9]+)*(?:[:@]|$)'
   - runtime: vllm
     pattern: '^ghcr\.io/[a-zA-Z0-9.\-_]+/vllm[a-zA-Z0-9.\-_]*(?:[:@]|$)'
 

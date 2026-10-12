@@ -375,6 +375,22 @@ func TestInferenceConfig_DetectRuntime(t *testing.T) {
 		{"otheruser/faster-whisper-server:latest-cpu", ""},
 		{"ghcr.io/fedirz/faster-whisper-server:latest-cpu", ""},
 
+		// vllm/ Docker Hub org, narrowed to the model-server families.
+		// vllm/agentic-api (llm-d's OpenAI Responses API layer, executes
+		// no model), vllm/vllm-router and vllm/vime stay quiet.
+		{"vllm/vllm-openai@sha256:abc", "vllm"},
+		{"vllm/vllm-openai-rocm:latest", "vllm"},
+		{"vllm/vllm-openai-cpu:v0.11.0", "vllm"},
+		{"vllm/vllm-tpu:latest", "vllm"},
+		{"vllm/vllm-tpu@sha256:abc", "vllm"},
+		{"vllm/vllm-omni:latest", "vllm"},
+		{"vllm/vllm-omni-rocm@sha256:abc", "vllm"},
+		{"vllm/agentic-api:latest", ""},
+		{"vllm/agentic-api@sha256:abc", ""},
+		{"vllm/vllm-router:latest", ""},
+		{"vllm/vime:latest", ""},
+		{"vllm/vime-rocm:latest", ""},
+
 		// llm-d model-server images — accelerator and provider variants
 		// attribute as runtime llm-d; infrastructure images in the same
 		// org (endpoint picker, sidecar, simulator) stay quiet.

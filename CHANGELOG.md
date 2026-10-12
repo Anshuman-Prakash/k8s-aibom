@@ -89,6 +89,13 @@ All notable changes to k8s-aibom are documented here. The format follows
   AMD GPU default) attribute as runtime `vllm`. Anchored to AMD's
   `rocm/` publisher namespace at the image-name boundary, so
   `rocm/pytorch`, `rocm/vllm-dev` and other registries stay unmatched.
+- **vLLM Docker Hub pattern narrowed to model-server images** (#150).
+  `^vllm/.*` matched every image in vLLM's org. It is now anchored to
+  the server families — `vllm/vllm-openai` (and `-cpu`/`-rocm`/`-xpu`),
+  `vllm/vllm-tpu`, `vllm/vllm-omni` (and `-rocm`) — so `vllm/agentic-api`
+  (llm-d's OpenAI Responses API layer in front of an InferencePool),
+  `vllm/vllm-router` and `vllm/vime` no longer attribute as a serving
+  runtime. Tag and digest forms of the servers still match.
 - **llm-d model-server runtime pattern** (#149). `llm-d-cuda`,
   `llm-d-rocm`, `llm-d-cpu`, `llm-d-xpu`, `llm-d-xpu-sglang`,
   `llm-d-hpu`, `llm-d-gke`, `llm-d-aws` and `llm-d-cuda-gb200` (tag and
