@@ -68,10 +68,13 @@ All notable changes to k8s-aibom are documented here. The format follows
   AMD GPU default) attribute as runtime `vllm`. Anchored to AMD's
   `rocm/` publisher namespace at the image-name boundary, so
   `rocm/pytorch`, `rocm/vllm-dev` and other registries stay unmatched.
-- **vLLM Docker Hub pattern no longer attributes `vllm/agentic-api`** (#150).
-  `vllm/vllm-openai`, `vllm/vllm-tpu` and other `vllm/` model-server
-  images still attribute as runtime `vllm`; `vllm/agentic-api` (llm-d's
-  OpenAI Responses API layer in front of an InferencePool) stays unmatched.
+- **vLLM Docker Hub pattern narrowed to model-server images** (#150).
+  `^vllm/.*` matched every image in vLLM's org. It is now anchored to
+  the server families — `vllm/vllm-openai` (and `-cpu`/`-rocm`/`-xpu`),
+  `vllm/vllm-tpu`, `vllm/vllm-omni` (and `-rocm`) — so `vllm/agentic-api`
+  (llm-d's OpenAI Responses API layer in front of an InferencePool),
+  `vllm/vllm-router` and `vllm/vime` no longer attribute as a serving
+  runtime. Tag and digest forms of the servers still match.
 - **ray-serve `rayproject/ray-ml` runtime pattern** (#151).
   `rayproject/ray-ml` (KubeRay serve samples) attributes as runtime
   `ray-serve`, same as `rayproject/ray`. Bounded at the image-name
