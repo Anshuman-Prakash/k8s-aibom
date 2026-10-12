@@ -372,6 +372,21 @@ func TestInferenceConfig_DetectRuntime(t *testing.T) {
 		{"otheruser/faster-whisper-server:latest-cpu", ""},
 		{"ghcr.io/fedirz/faster-whisper-server:latest-cpu", ""},
 
+		// llm-d model-server images — accelerator and provider variants
+		// attribute as runtime llm-d; infrastructure images in the same
+		// org (endpoint picker, sidecar, simulator) stay quiet.
+		{"ghcr.io/llm-d/llm-d-cuda:v0.2.0", "llm-d"},
+		{"ghcr.io/llm-d/llm-d-gke:v0.2.0", "llm-d"},
+		{"ghcr.io/llm-d/llm-d-cuda-dev:v0.2.0", "llm-d"},
+		{"ghcr.io/llm-d/llm-d-cuda-dev-ubuntu:v0.3.0", "llm-d"},
+		{"ghcr.io/llm-d/llm-d-xpu-sglang:v0.3.0", "llm-d"},
+		{"ghcr.io/llm-d/llm-d-xpu-sglang-dev@sha256:abc", "llm-d"},
+		{"ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.4.0", ""},
+		{"ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.4.0", ""},
+		{"ghcr.io/llm-d/llm-d-inference-sim:v0.5.0", ""},
+		{"ghcr.io/llm-d/llm-d-kv-cache-manager:v0.4.0", ""},
+		{"ghcr.io/llm-d/llm-d-benchmark:v0.4.0", ""},
+
 		// llama.cpp server — publisher-anchored GHCR images under ggml-org
 		// (current) and ggerganov (older). Tag and digest forms match;
 		// name-prefix and Docker Hub lookalikes do not. DetectRuntime is
