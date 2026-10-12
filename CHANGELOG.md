@@ -69,12 +69,16 @@ All notable changes to k8s-aibom are documented here. The format follows
   `rocm/` publisher namespace at the image-name boundary, so
   `rocm/pytorch`, `rocm/vllm-dev` and other registries stay unmatched.
 - **llm-d model-server runtime pattern** (#149). `llm-d-cuda`,
-  `llm-d-rocm`, `llm-d-cpu`, `llm-d-xpu`, `llm-d-hpu`, `llm-d-gke`,
-  `llm-d-aws` and `llm-d-cuda-gb200` (tag and digest forms, including
-  `-dev`/`-debug`/`-ubuntu` variants) attribute as runtime `llm-d`.
-  Anchored to those model-server names rather than the whole `llm-d/`
-  org, so endpoint picker, sidecar, inference-sim and other
-  infrastructure images stay unmatched.
+  `llm-d-rocm`, `llm-d-cpu`, `llm-d-xpu`, `llm-d-xpu-sglang`,
+  `llm-d-hpu`, `llm-d-gke`, `llm-d-aws` and `llm-d-cuda-gb200` (tag and
+  digest forms, including stacked `-dev`/`-debug`/`-ubuntu` variants)
+  attribute as runtime `llm-d`. Anchored to those model-server names
+  rather than the whole `llm-d/` org, so the router endpoint picker and
+  disaggregation sidecar, `llm-d-inference-sim`, the KV-cache manager
+  and other infrastructure images stay unmatched. Since llm-d v0.8 the
+  well-lit paths run upstream `vllm/vllm-openai` directly (v0.10.0
+  deprecated `llm-d-cuda`/`llm-d-aws` in its favour); those already
+  attribute as `vllm`.
 - **ray-serve `rayproject/ray-ml` runtime pattern** (#151).
   `rayproject/ray-ml` (KubeRay serve samples) attributes as runtime
   `ray-serve`, same as `rayproject/ray`. Bounded at the image-name
