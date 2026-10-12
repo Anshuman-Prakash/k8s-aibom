@@ -75,6 +75,17 @@ All notable changes to k8s-aibom are documented here. The format follows
   (llm-d's OpenAI Responses API layer in front of an InferencePool),
   `vllm/vllm-router` and `vllm/vime` no longer attribute as a serving
   runtime. Tag and digest forms of the servers still match.
+- **llm-d model-server runtime pattern** (#149). `llm-d-cuda`,
+  `llm-d-rocm`, `llm-d-cpu`, `llm-d-xpu`, `llm-d-xpu-sglang`,
+  `llm-d-hpu`, `llm-d-gke`, `llm-d-aws` and `llm-d-cuda-gb200` (tag and
+  digest forms, including stacked `-dev`/`-debug`/`-ubuntu` variants)
+  attribute as runtime `llm-d`. Anchored to those model-server names
+  rather than the whole `llm-d/` org, so the router endpoint picker and
+  disaggregation sidecar, `llm-d-inference-sim`, the KV-cache manager
+  and other infrastructure images stay unmatched. Since llm-d v0.8 the
+  well-lit paths run upstream `vllm/vllm-openai` directly (v0.10.0
+  deprecated `llm-d-cuda`/`llm-d-aws` in its favour); those already
+  attribute as `vllm`.
 - **ray-serve `rayproject/ray-ml` runtime pattern** (#151).
   `rayproject/ray-ml` (KubeRay serve samples) attributes as runtime
   `ray-serve`, same as `rayproject/ray`. Bounded at the image-name
@@ -98,6 +109,15 @@ All notable changes to k8s-aibom are documented here. The format follows
   as runtime `vllm`. Anchored at the image-name boundary, so sibling
   images under the same path and the same name under another registry
   stay unmatched.
+- **KServe HuggingFace server runtime pattern** (#152).
+  `kserve/huggingfaceserver` (tag and digest forms) attributes as
+  runtime `huggingface`, the same id a KServe `InferenceService`
+  declares for this server in `modelFormat.name`, so one id covers both
+  deployment shapes. Publisher-anchored at the image-name
+  boundary, so KServe infrastructure images under the same org
+  (`kserve/kserve-controller`, `kserve/agent`, `kserve/router`,
+  `kserve/storage-initializer`), name-prefix near-misses, and other
+  registries stay unmatched.
 
 ### Added
 
