@@ -409,8 +409,8 @@ func TestInferenceConfig_DetectRuntime(t *testing.T) {
 		// run as a plain Deployment. Tag and digest forms match; KServe
 		// infrastructure images under the same org, name-prefix, and
 		// other-registry near-misses do not.
-		{"kserve/huggingfaceserver:latest", "huggingfaceserver"},
-		{"kserve/huggingfaceserver@sha256:abc", "huggingfaceserver"},
+		{"kserve/huggingfaceserver:latest", "huggingface"},
+		{"kserve/huggingfaceserver@sha256:abc", "huggingface"},
 		{"kserve/kserve-controller:latest", ""},
 		{"kserve/agent:latest", ""},
 		{"kserve/router:latest", ""},

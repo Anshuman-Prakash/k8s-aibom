@@ -93,7 +93,9 @@ All notable changes to k8s-aibom are documented here. The format follows
   stay unmatched.
 - **KServe HuggingFace server runtime pattern** (#152).
   `kserve/huggingfaceserver` (tag and digest forms) attributes as
-  runtime `huggingfaceserver`. Publisher-anchored at the image-name
+  runtime `huggingface`, the same id a KServe `InferenceService`
+  declares for this server in `modelFormat.name`, so one id covers both
+  deployment shapes. Publisher-anchored at the image-name
   boundary, so KServe infrastructure images under the same org
   (`kserve/kserve-controller`, `kserve/agent`, `kserve/router`,
   `kserve/storage-initializer`), name-prefix near-misses, and other
