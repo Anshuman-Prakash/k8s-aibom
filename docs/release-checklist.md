@@ -59,7 +59,13 @@ commit:
 ## After publishing
 
 1. Verify the image attestation: `gh attestation verify
-   oci://<image>@<digest> --owner GoogleCloudPlatform`.
+   oci://<image>@<digest> --owner GoogleCloudPlatform`. Then verify a
+   plugin archive offline from the release assets alone:
+   `gh attestation verify kubectl-aibom_<tag>_linux_amd64.tar.gz --owner
+   GoogleCloudPlatform --bundle kubectl-aibom_<tag>.provenance.intoto.jsonl`.
+   The four `*.intoto.jsonl` assets (image provenance, image SBOM, chart
+   provenance, plugin provenance) must all be present; the Scorecard
+   Signed-Releases check reads them.
 2. `helm install` from the published OCI chart on a clean kind cluster;
    confirm the digest-pinned image pulls.
 3. `kubectl apply` the release install.yaml on a clean cluster; confirm

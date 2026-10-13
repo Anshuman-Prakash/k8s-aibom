@@ -91,6 +91,7 @@ jobs:
         provenance: false
 
     - name: Attest image build provenance
+      id: attest-image
       uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
       with:
         subject-name: ${{ env.IMAGE }}
@@ -111,6 +112,7 @@ jobs:
         upload-release-assets: false
 
     - name: Attest SBOM
+      id: attest-sbom
       uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2
       with:
         subject-name: ${{ env.IMAGE }}
@@ -142,6 +144,7 @@ jobs:
     # The chart is attested like the image, so both artifacts AICR pins
     # (image digest + chart) are cryptographically verifiable.
     - name: Attest chart build provenance
+      id: attest-chart
       uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
       with:
         subject-name: ghcr.io/googlecloudplatform/charts/k8s-aibom
@@ -170,9 +173,31 @@ jobs:
         sha256sum kubectl-aibom_*.tar.gz > kubectl-aibom_checksums.txt
 
     - name: Attest plugin archives
+      id: attest-plugins
       uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
       with:
         subject-path: "kubectl-aibom_*.tar.gz"
+
+    # The attestations above live in the registry (image, SBOM, chart)
+    # and in GitHub's attestation store (plugins). Publish the Sigstore
+    # bundles as release assets too, so an air-gapped consumer can
+    # verify from the release page alone and the OpenSSF Scorecard
+    # Signed-Releases check can see them. Each bundle wraps an in-toto
+    # statement (SLSA build provenance, or the CycloneDX SBOM
+    # attestation) in a DSSE envelope; the .intoto.jsonl suffix is the
+    # convention that check recognizes.
+    - name: Collect attestation bundles as release assets
+      env:
+        IMAGE_BUNDLE: ${{ steps.attest-image.outputs.bundle-path }}
+        SBOM_BUNDLE: ${{ steps.attest-sbom.outputs.bundle-path }}
+        CHART_BUNDLE: ${{ steps.attest-chart.outputs.bundle-path }}
+        PLUGINS_BUNDLE: ${{ steps.attest-plugins.outputs.bundle-path }}
+      run: |
+        cp "${IMAGE_BUNDLE}"   "k8s-aibom-${TAG}.image.provenance.intoto.jsonl"
+        cp "${SBOM_BUNDLE}"    "k8s-aibom-${TAG}.image.sbom.intoto.jsonl"
+        cp "${CHART_BUNDLE}"   "k8s-aibom-${TAG}.chart.provenance.intoto.jsonl"
+        cp "${PLUGINS_BUNDLE}" "kubectl-aibom_${TAG}.provenance.intoto.jsonl"
+        ls -la ./*.intoto.jsonl
 
     - name: Create GitHub release
       env:
@@ -186,6 +211,8 @@ jobs:
         Chart: \`${CHART_REPO}/k8s-aibom:${VERSION}\`
 
         Verify: \`gh attestation verify oci://${IMAGE}@${DIGEST} --owner GoogleCloudPlatform\`
+
+        Attestation bundles (Sigstore, in-toto/DSSE) are attached as \`*.intoto.jsonl\` assets: SLSA build provenance for the image, the chart and the plugin archives, and the CycloneDX SBOM attestation for the image. Offline verification of a plugin archive: \`gh attestation verify kubectl-aibom_${TAG}_linux_amd64.tar.gz --owner GoogleCloudPlatform --bundle kubectl-aibom_${TAG}.provenance.intoto.jsonl\`
         EOF
         # Tags with a pre-release identifier (v1.0.0-rc.1) publish as
         # GitHub prereleases so they never show as "latest".
@@ -200,4 +227,5 @@ jobs:
           "dist/k8s-aibom-${VERSION}.tgz" \
           bin/manager \
           kubectl-aibom_*.tar.gz \
-          kubectl-aibom_checksums.txt
+          kubectl-aibom_checksums.txt \
+          ./*.intoto.jsonl
