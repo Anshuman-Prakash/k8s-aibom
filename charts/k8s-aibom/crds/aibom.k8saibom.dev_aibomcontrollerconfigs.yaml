@@ -17,7 +17,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     api-approved.kubernetes.io: unapproved, experimental-only
-    controller-gen.kubebuilder.io/version: v0.16.5
+    controller-gen.kubebuilder.io/version: v0.22.0
   name: aibomcontrollerconfigs.aibom.k8saibom.dev
 spec:
   group: aibom.k8saibom.dev
