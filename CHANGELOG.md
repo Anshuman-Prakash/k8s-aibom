@@ -33,6 +33,16 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ### Changed
 
+- **Attestation bundles are release assets.** Each release now attaches
+  its Sigstore bundles as `*.intoto.jsonl` assets — SLSA build
+  provenance for the image, the Helm chart and the `kubectl-aibom`
+  archives, and the CycloneDX SBOM attestation for the image — in
+  addition to the registry- and GitHub-stored attestations that
+  already existed. A consumer can verify an artifact from the release
+  page alone (`gh attestation verify <artifact> --owner
+  GoogleCloudPlatform --bundle <bundle>`), and the OpenSSF Scorecard
+  Signed-Releases check, which only looks at release assets, now sees
+  provenance. No change to the artifacts themselves.
 - **Build tooling: controller-gen v0.16.5 → v0.22.0.** Regenerated CRDs
   and RBAC are byte-identical apart from the generator version
   annotation. `make test` now passes `-timeout 30m` so the controller

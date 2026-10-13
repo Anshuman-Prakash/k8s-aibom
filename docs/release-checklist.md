@@ -61,7 +61,13 @@ commit:
 ## After publishing
 
 1. Verify the image attestation: `gh attestation verify
-   oci://<image>@<digest> --owner GoogleCloudPlatform`.
+   oci://<image>@<digest> --owner GoogleCloudPlatform`. Then verify a
+   plugin archive offline from the release assets alone:
+   `gh attestation verify kubectl-aibom_<tag>_linux_amd64.tar.gz --owner
+   GoogleCloudPlatform --bundle kubectl-aibom_<tag>.provenance.intoto.jsonl`.
+   The five `*.intoto.jsonl` assets (image provenance, image SBOM, chart
+   provenance, CRDs-chart provenance, plugin provenance) must all be
+   present; the Scorecard Signed-Releases check reads them.
 2. `helm install` the published CRDs chart, then the main chart, from
    OCI on a clean kind cluster; confirm the digest-pinned image pulls
    and the CRDs carry `app.kubernetes.io/managed-by=Helm`.
