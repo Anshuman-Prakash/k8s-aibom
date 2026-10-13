@@ -47,8 +47,11 @@ runtimeImagePatterns:
   # as rocm/pytorch do not match.
   - runtime: vllm
     pattern: '^rocm/vllm(?:[:@/]|$)'
+
+  # TGI, Triton and Ollama — exact publisher image names. Tag, digest
+  # and bare references match; name-prefix near-misses do not.
   - runtime: tgi
-    pattern: '^huggingface/text-generation-inference.*'
+    pattern: '^huggingface/text-generation-inference(?:[:@]|$)'
 
   # TGI's GHCR form was a deliberately preserved false negative pending
   # real deployment signal (see the registry-prefix note below); that
@@ -56,11 +59,11 @@ runtimeImagePatterns:
   # runtime attribution — so the publisher's GHCR namespace is now
   # covered. Same publisher, same image name; not a mirror pattern.
   - runtime: tgi
-    pattern: '^ghcr\.io/huggingface/text-generation-inference.*'
+    pattern: '^ghcr\.io/huggingface/text-generation-inference(?:[:@]|$)'
   - runtime: triton
-    pattern: '^nvcr\.io/nvidia/tritonserver.*'
+    pattern: '^nvcr\.io/nvidia/tritonserver(?:[:@]|$)'
   - runtime: ollama
-    pattern: '^ollama/ollama.*'
+    pattern: '^ollama/ollama(?:[:@]|$)'
 
   # ray-serve — Ray's own Docker Hub images. The optional -ml suffix
   # covers KubeRay serve samples (rayproject/ray-ml); bounded at the
@@ -84,24 +87,29 @@ runtimeImagePatterns:
   - runtime: llm-d
     pattern: '^(?:.*/)?llm-d/llm-d-(?:cuda-gb200|cuda|rocm|cpu|xpu-sglang|xpu|hpu|gke|aws)(?:-(?:dev|debug|ubuntu))*(?:[:@]|$)'
 
-  # SGLang — LMSYS-published serving framework. Distinct namespace on
-  # Docker Hub (lmsysorg/sglang); upstream tags follow semver-ish.
+  # SGLang — LMSYS-published server images on Docker Hub. Enumerate the
+  # ROCm, JAX, Omni and daily server builds listed under
+  # https://hub.docker.com/u/lmsysorg, retaining the existing CPU form.
+  # Bound each image name so sglang-router and unlisted suffixes do not
+  # attribute as a model server. The mixed sglang-staging repository
+  # also publishes renderer images and stays unmatched.
   - runtime: sglang
-    pattern: '^lmsysorg/sglang.*'
+    pattern: '^lmsysorg/sglang(?:-(?:cpu|rocm|jax|omni|daily))?(?:[:@]|$)'
 
   # LMDeploy — OpenMMLab-published serving / deployment framework for
-  # large language models. openmmlab/lmdeploy on Docker Hub.
+  # large language models. Exact openmmlab/lmdeploy name on Docker Hub;
+  # tag and digest forms match while lmdeploy-* images do not.
   - runtime: lmdeploy
-    pattern: '^openmmlab/lmdeploy.*'
+    pattern: '^openmmlab/lmdeploy(?:[:@]|$)'
 
   # HuggingFace Text Embeddings Inference (TEI) — companion to TGI
   # for embedding models. Distributed via ghcr.io/huggingface/.
   # Distinct from TGI (which serves generative models); both ship
   # under the same org but have separate image names so the pattern
-  # specifically targets text-embeddings-inference rather than
-  # matching all huggingface/* images.
+  # specifically targets the exact text-embeddings-inference name
+  # rather than matching name-prefix near-misses or all huggingface/*.
   - runtime: tei
-    pattern: '^ghcr\.io/huggingface/text-embeddings-inference.*'
+    pattern: '^ghcr\.io/huggingface/text-embeddings-inference(?:[:@]|$)'
 
   # NVIDIA NIM — packaged inference microservices, one image per model
   # family under the dedicated nvcr.io/nim/ org (e.g.
@@ -131,15 +139,15 @@ runtimeImagePatterns:
 
   # LiteLLM — the widely deployed LLM gateway/proxy (OpenAI-compatible
   # front door to many providers). ghcr.io/berriai/ is the publisher's
-  # own org and publishes only LiteLLM images (litellm,
-  # litellm-database, litellm-non_root), so the prefix cannot capture
-  # unrelated images. In the serving path, so it attributes as a
-  # runtime; demand signal: the litellm 1.82.8 PyPI supply-chain
+  # own org. Enumerate litellm, litellm-database and litellm-non_root
+  # at the image-name boundary so their tag and digest forms match
+  # while unlisted suffixes do not. In the serving path, it attributes
+  # as a runtime; demand signal: the litellm 1.82.8 PyPI supply-chain
   # incident (BerriAI/litellm#24512), where the fleet-wide question
   # was "where is litellm running?" — unanswerable without runtime
   # attribution.
   - runtime: litellm
-    pattern: '^ghcr\.io/berriai/litellm.*'
+    pattern: '^ghcr\.io/berriai/litellm(?:-database|-non_root)?(?:[:@]|$)'
 
   # TensorRT-LLM appears in two forms: under Triton
   # (`nvcr.io/nvidia/tritonserver:*-trtllm-*`, covered by the triton

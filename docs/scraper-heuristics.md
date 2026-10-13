@@ -111,6 +111,12 @@ workload report `declared`.
 image patterns produces an additional `application`-class Component
 naming the runtime (e.g., `vllm`, `tgi`, `triton`).
 
+The TGI, Triton, Ollama, SGLang, LMDeploy, TEI and LiteLLM patterns
+match at the image-name boundary: a tag, a digest or the end of the
+reference. Supported SGLang and LiteLLM image variants are enumerated
+in the allowlist; names such as `lmsysorg/sglang-router` and
+`nvcr.io/nvidia/tritonserver-sidecar` do not receive runtime attribution.
+
 - **Confidence: `inferred`.** The runtime identity is inferred from a
   pattern match against the image string, not declared by the workload
   owner. Pattern-match-derived attributes are never `declared`.
