@@ -276,8 +276,17 @@ func TestInferenceConfig_DetectRuntime(t *testing.T) {
 		{"vllm/vllm-openai:v0.6.3", "vllm"},
 		{"ghcr.io/foo/vllm:v0.6.3", "vllm"},
 		{"huggingface/text-generation-inference:2.0.0", "tgi"},
+		{"huggingface/text-generation-inference", "tgi"},
+		{"huggingface/text-generation-inference@" + testFullDigest, "tgi"},
+		{"huggingface/text-generation-inference-extra:1", ""},
 		{"nvcr.io/nvidia/tritonserver:24.01-py3", "triton"},
+		{"nvcr.io/nvidia/tritonserver", "triton"},
+		{"nvcr.io/nvidia/tritonserver@" + testFullDigest, "triton"},
+		{"nvcr.io/nvidia/tritonserver-sidecar:latest", ""},
 		{"ollama/ollama:0.1.0", "ollama"},
+		{"ollama/ollama", "ollama"},
+		{"ollama/ollama@" + testFullDigest, "ollama"},
+		{"ollama/ollama-extra:1", ""},
 		{"rayproject/ray:latest", "ray-serve"},
 		{"rayproject/ray-ml:2.52.0", "ray-serve"},
 		{"rayproject/ray-llm:latest", ""},
@@ -287,8 +296,44 @@ func TestInferenceConfig_DetectRuntime(t *testing.T) {
 		// Phase 11 additions
 		{"lmsysorg/sglang:v0.3.0", "sglang"},
 		{"lmsysorg/sglang-cpu:v0.3.0", "sglang"},
+		// Enumerated SGLang server variants retain tag, digest and bare
+		// image references; routers and unlisted suffixes stay quiet.
+		{"lmsysorg/sglang", "sglang"},
+		{"lmsysorg/sglang@" + testFullDigest, "sglang"},
+		{"lmsysorg/sglang-cpu", "sglang"},
+		{"lmsysorg/sglang-cpu@" + testFullDigest, "sglang"},
+		{"lmsysorg/sglang-rocm:v0.5.21-rocm724-mi35x-20261005", "sglang"},
+		{"lmsysorg/sglang-rocm", "sglang"},
+		{"lmsysorg/sglang-rocm@" + testFullDigest, "sglang"},
+		{"lmsysorg/sglang-jax:v0.1.0rc0", "sglang"},
+		{"lmsysorg/sglang-jax", "sglang"},
+		{"lmsysorg/sglang-jax@" + testFullDigest, "sglang"},
+		{"lmsysorg/sglang-omni:dev", "sglang"},
+		{"lmsysorg/sglang-omni", "sglang"},
+		{"lmsysorg/sglang-omni@" + testFullDigest, "sglang"},
+		{"lmsysorg/sglang-daily:v0.5.9-rocm720-mi30x-20260316", "sglang"},
+		{"lmsysorg/sglang-daily", "sglang"},
+		{"lmsysorg/sglang-daily@" + testFullDigest, "sglang"},
+		{"lmsysorg/sglang-staging:renderer-b4701d67", ""},
+		{"lmsysorg/sglang-staging", ""},
+		{"lmsysorg/sglang-staging@" + testFullDigest, ""},
+		{"lmsysorg/sglang-router:latest", ""},
+		{"lmsysorg/sglang-router@" + testFullDigest, ""},
+		{"lmsysorg/sglang-extra:1", ""},
+		{"lmsysorg/sglang-cpu-extra:1", ""},
+		{"lmsysorg/sglang-rocm-extra:1", ""},
+		{"lmsysorg/sglang-jax-extra:1", ""},
+		{"lmsysorg/sglang-omni-extra:1", ""},
+		{"lmsysorg/sglang-daily-extra:1", ""},
+		{"lmsysorg/sglang-staging-extra:1", ""},
 		{"openmmlab/lmdeploy:v0.5.0", "lmdeploy"},
+		{"openmmlab/lmdeploy", "lmdeploy"},
+		{"openmmlab/lmdeploy@" + testFullDigest, "lmdeploy"},
+		{"openmmlab/lmdeploy-extra:1", ""},
 		{"ghcr.io/huggingface/text-embeddings-inference:1.5", "tei"},
+		{"ghcr.io/huggingface/text-embeddings-inference", "tei"},
+		{"ghcr.io/huggingface/text-embeddings-inference@" + testFullDigest, "tei"},
+		{"ghcr.io/huggingface/text-embeddings-inference-extra:1", ""},
 
 		// Conservative-detection guard: similar-named but different
 		// projects must NOT match the Phase 11 patterns. See
@@ -302,6 +347,9 @@ func TestInferenceConfig_DetectRuntime(t *testing.T) {
 		// TGI observed running with no runtime attribution), so the
 		// publisher's own GHCR namespace is now covered.
 		{"ghcr.io/huggingface/text-generation-inference:2.0.0", "tgi"},
+		{"ghcr.io/huggingface/text-generation-inference", "tgi"},
+		{"ghcr.io/huggingface/text-generation-inference@" + testFullDigest, "tgi"},
+		{"ghcr.io/huggingface/text-generation-inference-extra:1", ""},
 
 		// NVIDIA NIM and Dynamo backend runtimes. Dynamo workers
 		// attribute to the backend that serves the model; the prefix
@@ -335,11 +383,21 @@ func TestInferenceConfig_DetectRuntime(t *testing.T) {
 		{"nvcr.io/nvidia/cloud-native/k8s-nim-operator:2.0.0", ""},
 		{"nvcr.io/nimble/foo:1.0", ""}, // nim/ org only, not nim-prefixed orgs
 
-		// LiteLLM gateway — publisher's own GHCR org, all image
-		// variants; near-miss orgs must not match.
+		// LiteLLM gateway — publisher's own GHCR org, enumerated image
+		// variants; name-prefix and other-org near-misses do not match.
 		{"ghcr.io/berriai/litellm:main-v1.81.0", "litellm"},
 		{"ghcr.io/berriai/litellm-database:main-v1.81.0", "litellm"},
 		{"ghcr.io/berriai/litellm-non_root:main-v1.81.0", "litellm"},
+		{"ghcr.io/berriai/litellm", "litellm"},
+		{"ghcr.io/berriai/litellm@" + testFullDigest, "litellm"},
+		{"ghcr.io/berriai/litellm-database", "litellm"},
+		{"ghcr.io/berriai/litellm-database@" + testFullDigest, "litellm"},
+		{"ghcr.io/berriai/litellm-non_root", "litellm"},
+		{"ghcr.io/berriai/litellm-non_root@" + testFullDigest, "litellm"},
+		{"ghcr.io/berriai/litellm-extra:1", ""},
+		{"ghcr.io/berriai/litellm-database-extra:1", ""},
+		{"ghcr.io/berriai/litellm-non_root-extra:1", ""},
+		{"ghcr.io/berriai/litellm-database-non_root:1", ""},
 		{"ghcr.io/berriai-forks/litellm:1.0", ""},
 		{"docker.io/berriai/litellm:main", ""}, // ghcr only: the publisher's canonical registry
 
