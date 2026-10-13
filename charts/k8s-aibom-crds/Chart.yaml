@@ -1,0 +1,45 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v2
+name: k8s-aibom-crds
+description: >-
+  CustomResourceDefinitions for the k8s-aibom controller (AIBOM,
+  AIBOMControllerConfig), packaged as ordinary templates so Helm upgrades
+  them. Install or upgrade this chart before the k8s-aibom chart.
+type: application
+# version and appVersion are stamped from the git tag at package time,
+# identically to the k8s-aibom chart; the two always ship as one set.
+version: 1.0.0
+appVersion: "1.0.0"
+
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/category: security
+  artifacthub.io/crds: |
+    - kind: AIBOM
+      version: v1beta1
+      name: aiboms.aibom.k8saibom.dev
+      displayName: AIBOM
+      description: One CycloneDX ML-BOM per AI workload template.
+    - kind: AIBOMControllerConfig
+      version: v1beta1
+      name: aibomcontrollerconfigs.aibom.k8saibom.dev
+      displayName: AIBOMControllerConfig
+      description: Cluster-wide configuration of the k8s-aibom controller.
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://github.com/GoogleCloudPlatform/k8s-aibom#readme
+    - name: Main chart (k8s-aibom)
+      url: https://github.com/GoogleCloudPlatform/k8s-aibom/tree/main/charts/k8s-aibom

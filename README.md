@@ -113,6 +113,17 @@ helm install k8s-aibom oci://ghcr.io/googlecloudplatform/charts/k8s-aibom \
 
 The published chart pins the controller image **by digest** — you install exactly the attested artifact.
 
+The chart carries the CRDs in its `crds/` directory, which Helm installs once and never upgrades. If you will upgrade with Helm (or Helmfile), install the companion **`k8s-aibom-crds`** chart first, so CRD changes become an ordinary release upgrade (see [Upgrades](#upgrades)):
+
+```bash
+helm install k8s-aibom-crds oci://ghcr.io/googlecloudplatform/charts/k8s-aibom-crds \
+  --version 1.5.1 --namespace k8s-aibom-system --create-namespace
+helm install k8s-aibom oci://ghcr.io/googlecloudplatform/charts/k8s-aibom \
+  --version 1.5.1 --namespace k8s-aibom-system
+```
+
+Both charts ship at the same version from the same release and are attested the same way. The main chart's `crds/` directory stays, so a single-chart install keeps working; Helm skips CRDs that already exist.
+
 ### Install with kubectl
 
 ```bash
@@ -184,13 +195,24 @@ kubectl get aibom deployment-my-workload -n my-ai-namespace -o jsonpath='{.statu
 
 ### Upgrades
 
-`helm upgrade` handles everything **except the CRDs**: Helm installs `crds/`-directory CRDs on first install but never upgrades them (standard Helm behavior — automatic CRD changes could destroy user data). When a release updates the CRDs, apply them explicitly before upgrading:
+`helm upgrade` of the main chart handles everything **except the CRDs**: Helm installs `crds/`-directory CRDs on first install but never upgrades them (standard Helm behavior — automatic CRD changes could destroy user data). Two ways to keep the CRDs current:
 
-```bash
-kubectl apply -f https://github.com/GoogleCloudPlatform/k8s-aibom/releases/download/<version>/install.yaml --server-side --field-manager=k8s-aibom-crds
-```
+- **With the `k8s-aibom-crds` chart (recommended):** upgrade it first, then the main chart, both to the new version. CRDs become an ordinary Helm release, upgraded like any other. An install that predates the CRDs chart adopts its existing CRDs once; see the [chart README](charts/k8s-aibom-crds/README.md#adopting-on-an-existing-install).
 
-(or apply the `crds/` directory from the matching chart). Within 1.x, CRD changes are additive only. **One exception to "degrades gracefully": upgrading to the `v1beta1` graduation release requires the CRD apply** — the graduated controller's informers need the CRDs to serve `v1beta1`, and readiness stays failing (loudly, by design) until they do. Full procedure and the storage-migration details: [docs/migration-v1beta1.md](docs/migration-v1beta1.md).
+  ```bash
+  helm upgrade k8s-aibom-crds oci://ghcr.io/googlecloudplatform/charts/k8s-aibom-crds --version <new> -n k8s-aibom-system
+  helm upgrade k8s-aibom      oci://ghcr.io/googlecloudplatform/charts/k8s-aibom      --version <new> -n k8s-aibom-system
+  ```
+
+- **Manually:** apply the release's CRDs before upgrading:
+
+  ```bash
+  kubectl apply -f https://github.com/GoogleCloudPlatform/k8s-aibom/releases/download/<version>/install.yaml --server-side --field-manager=k8s-aibom-crds
+  ```
+
+  (or apply the `crds/` directory from the matching chart).
+
+Within 1.x, CRD changes are additive only. **One exception to "degrades gracefully": upgrading to the `v1beta1` graduation release requires the CRD apply** — the graduated controller's informers need the CRDs to serve `v1beta1`, and readiness stays failing (loudly, by design) until they do. Full procedure and the storage-migration details: [docs/migration-v1beta1.md](docs/migration-v1beta1.md).
 
 If `config.verification` is set and the installed CRDs predate it, the chart refuses the upgrade before applying anything and prints the CRD-apply command to run first. That check reads the installed `AIBOMControllerConfig` CRD, so an upgrade with `config.verification` set needs a Helm identity that can `get` it. CRDs that Helm installed are owned by Helm's field manager, so applying them server-side under another manager needs `--force-conflicts`.
 

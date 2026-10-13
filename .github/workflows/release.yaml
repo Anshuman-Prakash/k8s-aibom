@@ -148,6 +148,22 @@ jobs:
         subject-digest: ${{ steps.chart.outputs.digest }}
         push-to-registry: true
 
+    # The CRDs chart (#77) ships at the same version so the two are one
+    # artifact set; downstream distributions pin them together.
+    - name: Package and push CRDs chart
+      id: crdschart
+      run: |
+        helm package charts/k8s-aibom-crds --version "${VERSION}" --app-version "${TAG}" --destination dist/
+        helm push "dist/k8s-aibom-crds-${VERSION}.tgz" "${CHART_REPO}" 2>&1 | tee push-crds.log
+        echo "digest=$(awk '/Digest:/ {print $2}' push-crds.log)" >> "$GITHUB_OUTPUT"
+
+    - name: Attest CRDs chart build provenance
+      uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+      with:
+        subject-name: ghcr.io/googlecloudplatform/charts/k8s-aibom-crds
+        subject-digest: ${{ steps.crdschart.outputs.digest }}
+        push-to-registry: true
+
     - name: Generate digest-pinned install.yaml
       # HELM override: the Makefile defaults to ./bin/helm and its
       # self-bootstrap cannot write to the runner; use setup-helm's binary.
@@ -184,6 +200,7 @@ jobs:
         Image: \`${IMAGE}:${TAG}\`
         Digest: \`${DIGEST}\`
         Chart: \`${CHART_REPO}/k8s-aibom:${VERSION}\`
+        CRDs chart: \`${CHART_REPO}/k8s-aibom-crds:${VERSION}\` (install or upgrade first)
 
         Verify: \`gh attestation verify oci://${IMAGE}@${DIGEST} --owner GoogleCloudPlatform\`
         EOF
