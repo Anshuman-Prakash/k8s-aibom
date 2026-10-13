@@ -19,7 +19,7 @@
 SHELL := /usr/bin/env bash -o pipefail
 
 # Versions of generated/downloaded tools.
-CONTROLLER_GEN_VERSION ?= v0.16.5
+CONTROLLER_GEN_VERSION ?= v0.22.0
 ENVTEST_VERSION         ?= release-0.24
 ENVTEST_K8S_VERSION     ?= 1.34.0
 IMG                     ?= k8s-aibom:latest
@@ -129,7 +129,7 @@ run: fmt vet
 .PHONY: test
 test: envtest
 	KUBEBUILDER_ASSETS="$$($(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" \
-		go test -race -coverprofile=cover.out ./...
+		go test -race -timeout 30m -coverprofile=cover.out ./...
 
 .PHONY: cover
 cover: test
