@@ -31,6 +31,15 @@ All notable changes to k8s-aibom are documented here. The format follows
   watch stream (measured). Found by the AICR maintainer's review of
   the v1.6 Dynamo scraper.
 
+### Changed
+
+- **Build tooling: controller-gen v0.16.5 → v0.22.0.** Regenerated CRDs
+  and RBAC are byte-identical apart from the generator version
+  annotation. `make test` now passes `-timeout 30m` so the controller
+  envtest package, which takes 8–10 minutes on CI-class machines, does
+  not hit `go test`'s 10-minute default on slower ones (reported by a
+  contributor as a spurious failure on main).
+
 ### Added
 
 - **Runtime image-name boundary guards** (#165). TGI (Docker Hub and
