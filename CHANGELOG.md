@@ -33,6 +33,15 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ### Added
 
+- **Runtime image-name boundary guards** (#165). TGI (Docker Hub and
+  GHCR), Triton, Ollama, SGLang, LMDeploy, TEI and LiteLLM no longer
+  attribute similarly named images as runtimes. Tag, digest and bare
+  references still match. SGLang retains the CPU form and enumerates
+  LMSYS's ROCm, JAX, Omni and daily server builds; LiteLLM
+  retains its `-database` and `-non_root` variants. `sglang-router`,
+  `sglang-staging`, `tritonserver-sidecar` and other unlisted suffixes
+  stay unmatched.
+
 - **`DisaggregatedSet` scraper** (#137, Design 007 Part 1; v1.6
   coverage release). llm-d's prefill/decode primitive on NVIDIA
   hardware (`disaggregatedset.x-k8s.io/v1`, from the LeaderWorkerSet
