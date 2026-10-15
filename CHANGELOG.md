@@ -52,6 +52,13 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ### Added
 
+- **OpenVINO Model Server runtime pattern** (#164).
+  `openvino/model_server` (tag and digest forms) attributes as runtime
+  `openvino-model-server`. Publisher-anchored at the image-name
+  boundary, so other `openvino/*` images (`openvino/ubuntu24_runtime`,
+  `openvino/ubuntu24_dev`, `openvino/cvat_server`) and other registries
+  stay unmatched.
+
 - **Runtime image-name boundary guards** (#165). TGI (Docker Hub and
   GHCR), Triton, Ollama, SGLang, LMDeploy, TEI and LiteLLM no longer
   attribute similarly named images as runtimes. Tag, digest and bare

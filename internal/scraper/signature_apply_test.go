@@ -36,10 +36,10 @@ func (f *fakeVerifier) Verify(_ context.Context, c SignatureClaim) (SignatureRes
 
 func TestReservedAnnotationsAreNotModels(t *testing.T) {
 	comps := extractAnnotationModels(map[string]string{
-		AnnotationSignatureRef:              "https://models.example.com/sig.json",
-		AnnotationModelDigest:               "sha256:abcd",
-		modelAnnotationPrefix + "name":      "meta-llama/Llama-3.1-8B-Instruct",
-		"unrelated.example.com/other":       "ignored",
+		AnnotationSignatureRef:         "https://models.example.com/sig.json",
+		AnnotationModelDigest:          "sha256:abcd",
+		modelAnnotationPrefix + "name": "meta-llama/Llama-3.1-8B-Instruct",
+		"unrelated.example.com/other":  "ignored",
 	}, SourceWorkloadAnnotation, "metadata.annotations")
 
 	if len(comps) != 1 {

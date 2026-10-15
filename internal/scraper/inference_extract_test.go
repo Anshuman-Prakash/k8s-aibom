@@ -510,6 +510,22 @@ func TestInferenceConfig_DetectRuntime(t *testing.T) {
 		{"kserve/huggingfaceserver-extra:1", ""},
 		{"otheruser/huggingfaceserver:latest", ""},
 		{"ghcr.io/kserve/huggingfaceserver:latest", ""},
+
+		// openvino/model_server — Intel's OpenVINO Model Server on Docker
+		// Hub. Tag and digest forms match (including versioned releases and
+		// accelerator suffixes); other openvino/* images and other
+		// registries do not.
+		{"openvino/model_server:latest", "openvino-model-server"},
+		{"openvino/model_server:2026.4.1", "openvino-model-server"},
+		{"openvino/model_server:2026.4.1-gpu", "openvino-model-server"},
+		{"openvino/model_server:latest-gpu", "openvino-model-server"},
+		{"openvino/model_server:weekly", "openvino-model-server"},
+		{"openvino/model_server@sha256:abc", "openvino-model-server"},
+		{"openvino/ubuntu24_runtime:latest", ""},
+		{"openvino/ubuntu24_dev:latest", ""},
+		{"openvino/cvat_server:latest", ""},
+		{"docker.io/openvino/model_server:latest", ""},
+		{"ghcr.io/openvino/model_server:latest", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.image, func(t *testing.T) {
