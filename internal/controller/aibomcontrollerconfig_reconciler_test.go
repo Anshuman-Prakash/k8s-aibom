@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -557,7 +558,9 @@ func startConfigEnvTestFull(t *testing.T, crdDirs []string, health *WatchHealth)
 	go func() { mgrErrCh <- mgr.Start(mgrCtx) }()
 	t.Cleanup(func() {
 		mgrCancel()
-		<-mgrErrCh
+		if err := <-mgrErrCh; err != nil && !errors.Is(err, context.Canceled) {
+			t.Logf("manager stopped with error: %v", err)
+		}
 	})
 	if !mgr.GetCache().WaitForCacheSync(mgrCtx) {
 		t.Fatal("manager cache failed to sync")
