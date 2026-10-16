@@ -6,6 +6,290 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ## [Unreleased]
 
+The coverage release. One AIBOM per AI workload across the operator-managed
+kinds the inference ecosystem actually deploys — NVIDIA Dynamo, NIM
+Operator, LeaderWorkerSet, llm-d's DisaggregatedSet, CronJob — with owned
+workloads rolled up into their owner's document, a workload-kind allowlist,
+a companion CRDs chart, and the community's runtime-pattern additions.
+Third-party CRD outages degrade one kind instead of the controller.
+
+### Added
+
+- **NVIDIA Dynamo `DynamoGraphDeployment` scraper** (Design 003 §4;
+  v1.6 coverage release). One AIBOM per graph, keyed to the DGD.
+  `spec.backendFramework` becomes a **declared** runtime (`trtllm`
+  recorded as `tensorrt-llm` to match the image-pattern name);
+  `spec.components[i].modelRef` becomes a **declared** model attributed
+  to its component; component `type` is recorded as graph topology;
+  every component and role `podTemplate` goes through the shared
+  inference extraction with locators rooted at the component path.
+  No model identity is ever derived from Dynamo image paths (Dynamo
+  images carry no model). Registered only when the CRD is present;
+  RBAC adds get/list/watch on `dynamographdeployments.nvidia.com`.
+  Pod-status digests and the DGD → component → pod ownership roll-up
+  follow in the §3 change.
+
+- **Standalone `DynamoComponentDeployment` roots.** A component with no
+  graph parent is reported as its own root with locators rooted at
+  `spec`; components owned by a graph are absorbed. RBAC adds
+  `dynamocomponentdeployments` get/list/watch, and read-only get/list
+  on the Grove pod-owning kinds (`podcliquesets`, `podcliques`,
+  `podcliquescalinggroups`) to complete multi-node chains; absent CRDs
+  or denied permissions degrade to today's behavior.
+
+- **NVIDIA NIM Operator `NIMService` scraper** (Design 003 §1; v1.6
+  coverage release). One AIBOM per NIMService. The kind itself is a
+  **declared** runtime (`nim`); `spec.image` becomes the container
+  component (digest only when the repository is digest-pinned);
+  `spec.env` / `spec.args` go through the existing model allowlists
+  with `spec.env[i]` / `spec.args[i]` locators; the NIM image path
+  `nvcr.io/nim/<org>/<name>` yields an **inferred** model identity
+  **only when nothing is declared** — declared `NIM_MODEL_NAME` /
+  `NIM_SERVED_MODEL_NAME`, args or annotations always win (the AICR
+  case of a llama NIM image serving Qwen reports Qwen). Storage shape
+  (`nimCache` / `pvc` / `hostPath` / `emptyDir`), multi-node topology
+  and inference platform are recorded as properties. Registered only
+  when the CRD is present; RBAC adds get/list/watch on
+  `nimservices.apps.nvidia.com`.
+
+- **`LeaderWorkerSet` scraper** (Design 003 §2; v1.6 coverage release).
+  One AIBOM per LWS, keyed to the LWS UID. Both the optional leader
+  template and the required worker template go through the shared
+  inference extraction with locators rooted at
+  `spec.leaderWorkerTemplate.{leader,worker}Template`, an `lws.role`
+  property on every extracted component, and `lws.size` /
+  `lws.replicas` on container components. Nothing is declared by an
+  LWS, so runtime attribution is image-pattern inferred as for a
+  StatefulSet. Registered only when the CRD is present; RBAC adds
+  get/list/watch on `leaderworkersets.leaderworkerset.x-k8s.io`.
+  The StatefulSets an LWS materializes roll up in the §3 change.
+
+- **`DisaggregatedSet` scraper** (#137, Design 007 Part 1; v1.6
+  coverage release). llm-d's prefill/decode primitive on NVIDIA
+  hardware (`disaggregatedset.x-k8s.io/v1`, from the LeaderWorkerSet
+  project, lws ≥ 0.11; the wide expert-parallelism and P/D guides) is a
+  reported kind: one AIBOM per set, keyed to its UID. Each
+  `spec.roles[i]` inlines a LeaderWorkerSet template, so the extraction
+  is the LWS extraction once per role with locators rooted at
+  `spec.roles[i].spec.leaderWorkerTemplate.<leader|worker>Template`;
+  every component carries `disaggregatedset.role` and `lws.role`,
+  containers also `lws.size`, `lws.replicas` and
+  `disaggregatedset.slices`. The LeaderWorkerSets a set materializes,
+  their StatefulSets and pods roll up into the set's document (Design
+  005), which is how pod-status digests reach it. Runs under the watch
+  supervisor like every third-party kind; RBAC: get/list/watch
+  `disaggregatedsets.disaggregatedset.x-k8s.io`. `InferencePool`
+  membership (Design 007 Part 2) is v1.7.
+
+- **`CronJob` coverage.** One AIBOM per CronJob from `spec.jobTemplate`
+  (eval patterns as for Jobs); spawned Jobs roll up. RBAC adds
+  `cronjobs` get/list/watch.
+
+- **Ownership roll-up: one workload, one AIBOM** (#126, Design 005). A
+  tracked workload owned — directly or transitively via controller
+  `ownerReferences` — by another tracked kind no longer gets its own
+  AIBOM; the owner's document is the report. Covered chains:
+  `DynamoGraphDeployment` → `DynamoComponentDeployment` → `Deployment` |
+  `LeaderWorkerSet`, and `DynamoGraphDeployment` → Grove `PodCliqueSet`
+  → [`PodCliqueScalingGroup` →] `PodClique` (the PodCliqueSet is owned
+  directly by the graph); `NIMService` →
+  `Deployment` | `LeaderWorkerSet`; `LeaderWorkerSet` → `StatefulSet`;
+  `CronJob` → `Job`. The owner's document lists what it absorbed as
+  `aibom.rollup.owned.<i>` (`Kind/name`, sorted) and receives the
+  descendants' pods, so **the CRD kinds now resolve pod-status digests**
+  like a Deployment does through its ReplicaSets. Ownership only, never
+  labels. An intermediate kind the controller cannot read (RBAC, CRD
+  absent) ends the walk as unresolved and the child is reported as
+  before — coverage never regresses because of a missing permission
+  (`rollup_unresolved` outcome). Workloads with no controller owner pay
+  nothing. On upgrade, child AIBOMs under the chains above are deleted
+  on their next reconcile. New reconcile outcomes: `rolled_up`,
+  `rollup_unresolved`.
+
+- **Configurable workload-kind allowlist** (#136, Design 006).
+  `spec.discovery.workloadKinds` on `AIBOMControllerConfig` lists the
+  kinds the controller inventories as `Group/Kind` strings
+  (`apps/Deployment`, `nvidia.com/DynamoGraphDeployment`, ...); absent
+  or empty means every known kind, exactly as before. An entry that is
+  not a known kind is `ConfigInvalid` with the last-known-good retained
+  and the entry named, never a silent no-op. A kind not in the list is
+  treated like a namespace that is not opted in: no scrape, its existing
+  AIBOMs deleted, outcome `kind_not_allowed`. For the third-party kinds
+  (KServe, Dynamo, NIMService, LeaderWorkerSet) the list also decides
+  whether the watch exists: a kind removed from it is stopped (`aibom_
+  watch_healthy{kind}=0`, a Normal `WatchDisabled` event, not Degraded)
+  and started again when added back. **The apps/v1 and batch watches
+  are not narrowed in this release** — those controllers run on the
+  manager's shared cache, so the list filters their reporting only;
+  moving them under the supervisor is the v1.7 follow-up. A kind that is
+  switched off also stops absorbing the workloads it owns (Design 005),
+  which are reported on their own again rather than disappearing with
+  it. Changes apply without a restart: a `workloadKinds` change
+  re-reconciles every workload of every reporting kind.
+
+- **`kubectl aibom find`** — the incident command: filter tracked
+  workloads by `--runtime` (exact), `--model` (case-sensitive
+  substring), `--image` (substring of the container reference),
+  `--digest` (bare hex or `sha256:`-prefixed; a prefix matches) and
+  `--signed` (unsigned | claimed | verified); filters AND together.
+  Zero matches prints `0 matches` and exits 0 so scripts can tell
+  "none found" from "plugin broke". Rows whose document is in an
+  external sink or truncated are shown — never excluded — under
+  image/digest filters, with a stderr warning. Same client and RBAC
+  as `summary`; no new CRD, no controller flag.
+
+- **`k8s-aibom-crds` companion chart** (#77, requested by NVIDIA AICR).
+  The two CRDs are also published as their own chart,
+  `oci://ghcr.io/googlecloudplatform/charts/k8s-aibom-crds`, at the same
+  version and from the same tag-triggered, attested pipeline as the main
+  chart. Helm never upgrades CRDs shipped in a chart's `crds/` directory,
+  so a controller upgrade whose CRDs changed used to run against the
+  previous schema unless the operator applied the CRDs by hand; with the
+  companion chart the CRDs are an ordinary release, upgraded first, then
+  the controller. Each CRD carries `helm.sh/resource-policy: keep`, so
+  uninstalling the CRDs chart never deletes inventory. **Artifact-set
+  change for downstream distributions:** a release now comprises image,
+  main chart, CRDs chart, install.yaml and attestations; the main chart
+  keeps its `crds/` directory, so single-chart installs and `install.yaml`
+  are unchanged. CI installs the two charts in the documented order; the
+  chart copies of the CRDs are generated from `config/crd/bases` and
+  checked for drift.
+
+- **Metrics are now scrapable, opt-in** (#106). The controller's
+  Prometheus endpoint was registered but bound to loopback with no
+  Service — unreachable by any scraper, which made the chart's
+  "metrics" wording an overclaim and left the shipped
+  `grafana/podmonitoring.yaml` targeting a pod port that did not
+  exist. `metrics.enabled=true` now binds the endpoint on
+  `metrics.port` (8080), names the container port `metrics`, and
+  renders a ClusterIP Service; `metrics.serviceMonitor.enabled=true`
+  additionally renders a Prometheus Operator ServiceMonitor. Off by
+  default; nothing changes for existing installs.
+
+- **`aibom_workload_reconcile_outcomes_total{kind,outcome}`** — the
+  series that separates "opted-in namespace, nothing recognized" from
+  a broken controller: `not_opted_in` (namespace selector did not
+  match), `unmatched` (opted in, no inference signal — conservative
+  detection declined), `matched` (an AIBOM is produced).
+
+- **AMD ROCm vLLM runtime pattern** (#113). `rocm/vllm` images (tag,
+  digest, and the `rocm/vllm/<build>` path form KubeAI ships as its
+  AMD GPU default) attribute as runtime `vllm`. Anchored to AMD's
+  `rocm/` publisher namespace at the image-name boundary, so
+  `rocm/pytorch`, `rocm/vllm-dev` and other registries stay unmatched.
+
+- **vLLM CPU release image runtime pattern** (#114).
+  `public.ecr.aws/q9t5s3a7/vllm-cpu-release-repo` (the vLLM project's
+  own public ECR alias; KubeAI's CPU default) attributes as runtime
+  `vllm`. Anchored to that exact alias and repository, not a broad
+  `public.ecr.aws/.*vllm` match.
+
+- **Infinity embeddings server runtime pattern** (#111).
+  `michaelf34/infinity` (tag and digest forms, including `0.0.77-cpu`
+  and `0.0.77-rocm`) attributes as runtime `infinity`. The match is
+  publisher-anchored at the image-name boundary, so
+  `michaelf34/infinity-extra` and other registries stay unmatched.
+
+- **faster-whisper-server speech-to-text runtime pattern** (#112).
+  `fedirz/faster-whisper-server` (tag and digest forms, including
+  KubeAI's `latest-cpu` and `latest-cuda`) attributes as runtime
+  `faster-whisper`. The match is publisher-anchored at the image-name
+  boundary, so `fedirz/faster-whisper-server-extra` and other
+  registries stay unmatched.
+
+- **LMCache production-stack vLLM runtime pattern** (#147).
+  `lmcache/vllm-openai` (tag and digest forms; production-stack's
+  default model server) attributes as runtime `vllm`. Anchored to
+  LMCache's `lmcache/` publisher namespace at the image-name boundary,
+  so `lmcache/lmstack-router`, `lmcache/lmstack-sidecar` and other
+  orgs stay unmatched.
+
+- **Vertex AI Model Garden vLLM runtime pattern** (#146).
+  `us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve`
+  (tag and digest forms; GKE tutorials' Vertex vLLM image) attributes
+  as runtime `vllm`. Anchored at the image-name boundary, so sibling
+  images under the same path and the same name under another registry
+  stay unmatched.
+
+- **llama.cpp server runtime pattern** (#148).
+  `ghcr.io/ggml-org/llama.cpp` and the older `ghcr.io/ggerganov/llama.cpp`
+  (tag and digest forms, including `server-b10680`, `server-cuda-b10680`,
+  and `server-rocm-b10680`) attribute as runtime `llama.cpp`. The match is
+  publisher-anchored at the image-name boundary, so name-prefix near-misses
+  and Docker Hub lookalikes stay unmatched. Tag-independent; `server-`
+  build numbers are not treated as a runtime version.
+
+- **ray-serve `rayproject/ray-ml` runtime pattern** (#151).
+  `rayproject/ray-ml` (KubeRay serve samples) attributes as runtime
+  `ray-serve`, same as `rayproject/ray`. Bounded at the image-name
+  boundary, so other `rayproject/ray-*` names stay unmatched.
+
+- **KServe HuggingFace server runtime pattern** (#152).
+  `kserve/huggingfaceserver` (tag and digest forms) attributes as
+  runtime `huggingface`, the same id a KServe `InferenceService`
+  declares for this server in `modelFormat.name`, so one id covers both
+  deployment shapes. Publisher-anchored at the image-name
+  boundary, so KServe infrastructure images under the same org
+  (`kserve/kserve-controller`, `kserve/agent`, `kserve/router`,
+  `kserve/storage-initializer`), name-prefix near-misses, and other
+  registries stay unmatched.
+
+- **OpenVINO Model Server runtime pattern** (#164).
+  `openvino/model_server` (tag and digest forms) attributes as runtime
+  `openvino-model-server`. Publisher-anchored at the image-name
+  boundary, so other `openvino/*` images (`openvino/ubuntu24_runtime`,
+  `openvino/ubuntu24_dev`, `openvino/cvat_server`) and other registries
+  stay unmatched.
+
+- **llm-d model-server runtime pattern** (#149). `llm-d-cuda`,
+  `llm-d-rocm`, `llm-d-cpu`, `llm-d-xpu`, `llm-d-xpu-sglang`,
+  `llm-d-hpu`, `llm-d-gke`, `llm-d-aws` and `llm-d-cuda-gb200` (tag and
+  digest forms, including stacked `-dev`/`-debug`/`-ubuntu` variants)
+  attribute as runtime `llm-d`. Anchored to those model-server names
+  rather than the whole `llm-d/` org, so the router endpoint picker and
+  disaggregation sidecar, `llm-d-inference-sim`, the KV-cache manager
+  and other infrastructure images stay unmatched. Since llm-d v0.8 the
+  well-lit paths run upstream `vllm/vllm-openai` directly (v0.10.0
+  deprecated `llm-d-cuda`/`llm-d-aws` in its favour); those already
+  attribute as `vllm`.
+
+- **vLLM Docker Hub pattern narrowed to model-server images** (#150).
+  `^vllm/.*` matched every image in vLLM's org. It is now anchored to
+  the server families — `vllm/vllm-openai` (and `-cpu`/`-rocm`/`-xpu`),
+  `vllm/vllm-tpu`, `vllm/vllm-omni` (and `-rocm`) — so `vllm/agentic-api`
+  (llm-d's OpenAI Responses API layer in front of an InferencePool),
+  `vllm/vllm-router` and `vllm/vime` no longer attribute as a serving
+  runtime. Tag and digest forms of the servers still match.
+
+- **Runtime image-name boundary guards** (#165). TGI (Docker Hub and
+  GHCR), Triton, Ollama, SGLang, LMDeploy, TEI and LiteLLM no longer
+  attribute similarly named images as runtimes. Tag, digest and bare
+  references still match. SGLang retains the CPU form and enumerates
+  LMSYS's ROCm, JAX, Omni and daily server builds; LiteLLM
+  retains its `-database` and `-non_root` variants. `sglang-router`,
+  `sglang-staging`, `tritonserver-sidecar` and other unlisted suffixes
+  stay unmatched.
+
+### Changed
+
+- **Attestation bundles are release assets.** Each release now attaches
+  its Sigstore bundles as `*.intoto.jsonl` assets — SLSA build
+  provenance for the image, the Helm chart and the `kubectl-aibom`
+  archives, and the CycloneDX SBOM attestation for the image — in
+  addition to the registry- and GitHub-stored attestations that
+  already existed. A consumer can verify an artifact from the release
+  page alone (`gh attestation verify <artifact> --owner
+  GoogleCloudPlatform --bundle <bundle>`), and the OpenSSF Scorecard
+  Signed-Releases check, which only looks at release assets, now sees
+  provenance. No change to the artifacts themselves.
+
+- **Build tooling: controller-gen v0.16.5 → v0.22.0.** Regenerated CRDs
+  and RBAC are byte-identical apart from the generator version
+  annotation. `make test` now passes `-timeout 30m` so the controller
+  envtest package, which takes 8–10 minutes on CI-class machines, does
+  not hit `go test`'s 10-minute default on slower ones (reported by a
+  contributor as a spurious failure on main).
+
 ### Fixed
 
 - **A third-party CRD that is present but unservable no longer takes
@@ -30,270 +314,6 @@ All notable changes to k8s-aibom are documented here. The format follows
   client-go's reflector swallows conversion errors on an established
   watch stream (measured). Found by the AICR maintainer's review of
   the v1.6 Dynamo scraper.
-
-### Changed
-
-- **Attestation bundles are release assets.** Each release now attaches
-  its Sigstore bundles as `*.intoto.jsonl` assets — SLSA build
-  provenance for the image, the Helm chart and the `kubectl-aibom`
-  archives, and the CycloneDX SBOM attestation for the image — in
-  addition to the registry- and GitHub-stored attestations that
-  already existed. A consumer can verify an artifact from the release
-  page alone (`gh attestation verify <artifact> --owner
-  GoogleCloudPlatform --bundle <bundle>`), and the OpenSSF Scorecard
-  Signed-Releases check, which only looks at release assets, now sees
-  provenance. No change to the artifacts themselves.
-- **Build tooling: controller-gen v0.16.5 → v0.22.0.** Regenerated CRDs
-  and RBAC are byte-identical apart from the generator version
-  annotation. `make test` now passes `-timeout 30m` so the controller
-  envtest package, which takes 8–10 minutes on CI-class machines, does
-  not hit `go test`'s 10-minute default on slower ones (reported by a
-  contributor as a spurious failure on main).
-
-### Added
-
-- **OpenVINO Model Server runtime pattern** (#164).
-  `openvino/model_server` (tag and digest forms) attributes as runtime
-  `openvino-model-server`. Publisher-anchored at the image-name
-  boundary, so other `openvino/*` images (`openvino/ubuntu24_runtime`,
-  `openvino/ubuntu24_dev`, `openvino/cvat_server`) and other registries
-  stay unmatched.
-
-- **`k8s-aibom-crds` companion chart** (#77, requested by NVIDIA AICR).
-  The two CRDs are also published as their own chart,
-  `oci://ghcr.io/googlecloudplatform/charts/k8s-aibom-crds`, at the same
-  version and from the same tag-triggered, attested pipeline as the main
-  chart. Helm never upgrades CRDs shipped in a chart's `crds/` directory,
-  so a controller upgrade whose CRDs changed used to run against the
-  previous schema unless the operator applied the CRDs by hand; with the
-  companion chart the CRDs are an ordinary release, upgraded first, then
-  the controller. Each CRD carries `helm.sh/resource-policy: keep`, so
-  uninstalling the CRDs chart never deletes inventory. **Artifact-set
-  change for downstream distributions:** a release now comprises image,
-  main chart, CRDs chart, install.yaml and attestations; the main chart
-  keeps its `crds/` directory, so single-chart installs and `install.yaml`
-  are unchanged. CI installs the two charts in the documented order; the
-  chart copies of the CRDs are generated from `config/crd/bases` and
-  checked for drift.
-- **Runtime image-name boundary guards** (#165). TGI (Docker Hub and
-  GHCR), Triton, Ollama, SGLang, LMDeploy, TEI and LiteLLM no longer
-  attribute similarly named images as runtimes. Tag, digest and bare
-  references still match. SGLang retains the CPU form and enumerates
-  LMSYS's ROCm, JAX, Omni and daily server builds; LiteLLM
-  retains its `-database` and `-non_root` variants. `sglang-router`,
-  `sglang-staging`, `tritonserver-sidecar` and other unlisted suffixes
-  stay unmatched.
-
-- **`DisaggregatedSet` scraper** (#137, Design 007 Part 1; v1.6
-  coverage release). llm-d's prefill/decode primitive on NVIDIA
-  hardware (`disaggregatedset.x-k8s.io/v1`, from the LeaderWorkerSet
-  project, lws ≥ 0.11; the wide expert-parallelism and P/D guides) is a
-  reported kind: one AIBOM per set, keyed to its UID. Each
-  `spec.roles[i]` inlines a LeaderWorkerSet template, so the extraction
-  is the LWS extraction once per role with locators rooted at
-  `spec.roles[i].spec.leaderWorkerTemplate.<leader|worker>Template`;
-  every component carries `disaggregatedset.role` and `lws.role`,
-  containers also `lws.size`, `lws.replicas` and
-  `disaggregatedset.slices`. The LeaderWorkerSets a set materializes,
-  their StatefulSets and pods roll up into the set's document (Design
-  005), which is how pod-status digests reach it. Runs under the watch
-  supervisor like every third-party kind; RBAC: get/list/watch
-  `disaggregatedsets.disaggregatedset.x-k8s.io`. `InferencePool`
-  membership (Design 007 Part 2) is v1.7.
-- **Configurable workload-kind allowlist** (#136, Design 006).
-  `spec.discovery.workloadKinds` on `AIBOMControllerConfig` lists the
-  kinds the controller inventories as `Group/Kind` strings
-  (`apps/Deployment`, `nvidia.com/DynamoGraphDeployment`, ...); absent
-  or empty means every known kind, exactly as before. An entry that is
-  not a known kind is `ConfigInvalid` with the last-known-good retained
-  and the entry named, never a silent no-op. A kind not in the list is
-  treated like a namespace that is not opted in: no scrape, its existing
-  AIBOMs deleted, outcome `kind_not_allowed`. For the third-party kinds
-  (KServe, Dynamo, NIMService, LeaderWorkerSet) the list also decides
-  whether the watch exists: a kind removed from it is stopped (`aibom_
-  watch_healthy{kind}=0`, a Normal `WatchDisabled` event, not Degraded)
-  and started again when added back. **The apps/v1 and batch watches
-  are not narrowed in this release** — those controllers run on the
-  manager's shared cache, so the list filters their reporting only;
-  moving them under the supervisor is the v1.7 follow-up. A kind that is
-  switched off also stops absorbing the workloads it owns (Design 005),
-  which are reported on their own again rather than disappearing with
-  it. Changes apply without a restart: a `workloadKinds` change
-  re-reconciles every workload of every reporting kind.
-
-- **Ownership roll-up: one workload, one AIBOM** (#126, Design 005). A
-  tracked workload owned — directly or transitively via controller
-  `ownerReferences` — by another tracked kind no longer gets its own
-  AIBOM; the owner's document is the report. Covered chains:
-  `DynamoGraphDeployment` → `DynamoComponentDeployment` → `Deployment` |
-  `LeaderWorkerSet`, and `DynamoGraphDeployment` → Grove `PodCliqueSet`
-  → [`PodCliqueScalingGroup` →] `PodClique` (the PodCliqueSet is owned
-  directly by the graph); `NIMService` →
-  `Deployment` | `LeaderWorkerSet`; `LeaderWorkerSet` → `StatefulSet`;
-  `CronJob` → `Job`. The owner's document lists what it absorbed as
-  `aibom.rollup.owned.<i>` (`Kind/name`, sorted) and receives the
-  descendants' pods, so **the CRD kinds now resolve pod-status digests**
-  like a Deployment does through its ReplicaSets. Ownership only, never
-  labels. An intermediate kind the controller cannot read (RBAC, CRD
-  absent) ends the walk as unresolved and the child is reported as
-  before — coverage never regresses because of a missing permission
-  (`rollup_unresolved` outcome). Workloads with no controller owner pay
-  nothing. On upgrade, child AIBOMs under the chains above are deleted
-  on their next reconcile. New reconcile outcomes: `rolled_up`,
-  `rollup_unresolved`.
-- **`CronJob` coverage.** One AIBOM per CronJob from `spec.jobTemplate`
-  (eval patterns as for Jobs); spawned Jobs roll up. RBAC adds
-  `cronjobs` get/list/watch.
-- **Standalone `DynamoComponentDeployment` roots.** A component with no
-  graph parent is reported as its own root with locators rooted at
-  `spec`; components owned by a graph are absorbed. RBAC adds
-  `dynamocomponentdeployments` get/list/watch, and read-only get/list
-  on the Grove pod-owning kinds (`podcliquesets`, `podcliques`,
-  `podcliquescalinggroups`) to complete multi-node chains; absent CRDs
-  or denied permissions degrade to today's behavior.
-- **AMD ROCm vLLM runtime pattern** (#113). `rocm/vllm` images (tag,
-  digest, and the `rocm/vllm/<build>` path form KubeAI ships as its
-  AMD GPU default) attribute as runtime `vllm`. Anchored to AMD's
-  `rocm/` publisher namespace at the image-name boundary, so
-  `rocm/pytorch`, `rocm/vllm-dev` and other registries stay unmatched.
-- **vLLM Docker Hub pattern narrowed to model-server images** (#150).
-  `^vllm/.*` matched every image in vLLM's org. It is now anchored to
-  the server families — `vllm/vllm-openai` (and `-cpu`/`-rocm`/`-xpu`),
-  `vllm/vllm-tpu`, `vllm/vllm-omni` (and `-rocm`) — so `vllm/agentic-api`
-  (llm-d's OpenAI Responses API layer in front of an InferencePool),
-  `vllm/vllm-router` and `vllm/vime` no longer attribute as a serving
-  runtime. Tag and digest forms of the servers still match.
-- **llm-d model-server runtime pattern** (#149). `llm-d-cuda`,
-  `llm-d-rocm`, `llm-d-cpu`, `llm-d-xpu`, `llm-d-xpu-sglang`,
-  `llm-d-hpu`, `llm-d-gke`, `llm-d-aws` and `llm-d-cuda-gb200` (tag and
-  digest forms, including stacked `-dev`/`-debug`/`-ubuntu` variants)
-  attribute as runtime `llm-d`. Anchored to those model-server names
-  rather than the whole `llm-d/` org, so the router endpoint picker and
-  disaggregation sidecar, `llm-d-inference-sim`, the KV-cache manager
-  and other infrastructure images stay unmatched. Since llm-d v0.8 the
-  well-lit paths run upstream `vllm/vllm-openai` directly (v0.10.0
-  deprecated `llm-d-cuda`/`llm-d-aws` in its favour); those already
-  attribute as `vllm`.
-- **ray-serve `rayproject/ray-ml` runtime pattern** (#151).
-  `rayproject/ray-ml` (KubeRay serve samples) attributes as runtime
-  `ray-serve`, same as `rayproject/ray`. Bounded at the image-name
-  boundary, so other `rayproject/ray-*` names stay unmatched.
-- **llama.cpp server runtime pattern** (#148).
-  `ghcr.io/ggml-org/llama.cpp` and the older `ghcr.io/ggerganov/llama.cpp`
-  (tag and digest forms, including `server-b10680`, `server-cuda-b10680`,
-  and `server-rocm-b10680`) attribute as runtime `llama.cpp`. The match is
-  publisher-anchored at the image-name boundary, so name-prefix near-misses
-  and Docker Hub lookalikes stay unmatched. Tag-independent; `server-`
-  build numbers are not treated as a runtime version.
-- **LMCache production-stack vLLM runtime pattern** (#147).
-  `lmcache/vllm-openai` (tag and digest forms; production-stack's
-  default model server) attributes as runtime `vllm`. Anchored to
-  LMCache's `lmcache/` publisher namespace at the image-name boundary,
-  so `lmcache/lmstack-router`, `lmcache/lmstack-sidecar` and other
-  orgs stay unmatched.
-- **Vertex AI Model Garden vLLM runtime pattern** (#146).
-  `us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve`
-  (tag and digest forms; GKE tutorials' Vertex vLLM image) attributes
-  as runtime `vllm`. Anchored at the image-name boundary, so sibling
-  images under the same path and the same name under another registry
-  stay unmatched.
-- **KServe HuggingFace server runtime pattern** (#152).
-  `kserve/huggingfaceserver` (tag and digest forms) attributes as
-  runtime `huggingface`, the same id a KServe `InferenceService`
-  declares for this server in `modelFormat.name`, so one id covers both
-  deployment shapes. Publisher-anchored at the image-name
-  boundary, so KServe infrastructure images under the same org
-  (`kserve/kserve-controller`, `kserve/agent`, `kserve/router`,
-  `kserve/storage-initializer`), name-prefix near-misses, and other
-  registries stay unmatched.
-
-### Added
-
-- **`LeaderWorkerSet` scraper** (Design 003 §2; v1.6 coverage release).
-  One AIBOM per LWS, keyed to the LWS UID. Both the optional leader
-  template and the required worker template go through the shared
-  inference extraction with locators rooted at
-  `spec.leaderWorkerTemplate.{leader,worker}Template`, an `lws.role`
-  property on every extracted component, and `lws.size` /
-  `lws.replicas` on container components. Nothing is declared by an
-  LWS, so runtime attribution is image-pattern inferred as for a
-  StatefulSet. Registered only when the CRD is present; RBAC adds
-  get/list/watch on `leaderworkersets.leaderworkerset.x-k8s.io`.
-  The StatefulSets an LWS materializes roll up in the §3 change.
-
-- **NVIDIA NIM Operator `NIMService` scraper** (Design 003 §1; v1.6
-  coverage release). One AIBOM per NIMService. The kind itself is a
-  **declared** runtime (`nim`); `spec.image` becomes the container
-  component (digest only when the repository is digest-pinned);
-  `spec.env` / `spec.args` go through the existing model allowlists
-  with `spec.env[i]` / `spec.args[i]` locators; the NIM image path
-  `nvcr.io/nim/<org>/<name>` yields an **inferred** model identity
-  **only when nothing is declared** — declared `NIM_MODEL_NAME` /
-  `NIM_SERVED_MODEL_NAME`, args or annotations always win (the AICR
-  case of a llama NIM image serving Qwen reports Qwen). Storage shape
-  (`nimCache` / `pvc` / `hostPath` / `emptyDir`), multi-node topology
-  and inference platform are recorded as properties. Registered only
-  when the CRD is present; RBAC adds get/list/watch on
-  `nimservices.apps.nvidia.com`.
-
-- **NVIDIA Dynamo `DynamoGraphDeployment` scraper** (Design 003 §4;
-  v1.6 coverage release). One AIBOM per graph, keyed to the DGD.
-  `spec.backendFramework` becomes a **declared** runtime (`trtllm`
-  recorded as `tensorrt-llm` to match the image-pattern name);
-  `spec.components[i].modelRef` becomes a **declared** model attributed
-  to its component; component `type` is recorded as graph topology;
-  every component and role `podTemplate` goes through the shared
-  inference extraction with locators rooted at the component path.
-  No model identity is ever derived from Dynamo image paths (Dynamo
-  images carry no model). Registered only when the CRD is present;
-  RBAC adds get/list/watch on `dynamographdeployments.nvidia.com`.
-  Pod-status digests and the DGD → component → pod ownership roll-up
-  follow in the §3 change.
-
-- **`kubectl aibom find`** — the incident command: filter tracked
-  workloads by `--runtime` (exact), `--model` (case-sensitive
-  substring), `--image` (substring of the container reference),
-  `--digest` (bare hex or `sha256:`-prefixed; a prefix matches) and
-  `--signed` (unsigned | claimed | verified); filters AND together.
-  Zero matches prints `0 matches` and exits 0 so scripts can tell
-  "none found" from "plugin broke". Rows whose document is in an
-  external sink or truncated are shown — never excluded — under
-  image/digest filters, with a stderr warning. Same client and RBAC
-  as `summary`; no new CRD, no controller flag.
-
-- **vLLM CPU release image runtime pattern** (#114).
-  `public.ecr.aws/q9t5s3a7/vllm-cpu-release-repo` (the vLLM project's
-  own public ECR alias; KubeAI's CPU default) attributes as runtime
-  `vllm`. Anchored to that exact alias and repository, not a broad
-  `public.ecr.aws/.*vllm` match.
-- **Infinity embeddings server runtime pattern** (#111).
-  `michaelf34/infinity` (tag and digest forms, including `0.0.77-cpu`
-  and `0.0.77-rocm`) attributes as runtime `infinity`. The match is
-  publisher-anchored at the image-name boundary, so
-  `michaelf34/infinity-extra` and other registries stay unmatched.
-- **faster-whisper-server speech-to-text runtime pattern** (#112).
-  `fedirz/faster-whisper-server` (tag and digest forms, including
-  KubeAI's `latest-cpu` and `latest-cuda`) attributes as runtime
-  `faster-whisper`. The match is publisher-anchored at the image-name
-  boundary, so `fedirz/faster-whisper-server-extra` and other
-  registries stay unmatched.
-- **Metrics are now scrapable, opt-in** (#106). The controller's
-  Prometheus endpoint was registered but bound to loopback with no
-  Service — unreachable by any scraper, which made the chart's
-  "metrics" wording an overclaim and left the shipped
-  `grafana/podmonitoring.yaml` targeting a pod port that did not
-  exist. `metrics.enabled=true` now binds the endpoint on
-  `metrics.port` (8080), names the container port `metrics`, and
-  renders a ClusterIP Service; `metrics.serviceMonitor.enabled=true`
-  additionally renders a Prometheus Operator ServiceMonitor. Off by
-  default; nothing changes for existing installs.
-- **`aibom_workload_reconcile_outcomes_total{kind,outcome}`** — the
-  series that separates "opted-in namespace, nothing recognized" from
-  a broken controller: `not_opted_in` (namespace selector did not
-  match), `unmatched` (opted in, no inference signal — conservative
-  detection declined), `matched` (an AIBOM is produced).
-
-### Fixed
 
 - **Served-schema skew is now detected and reported** (#104). If the
   cluster's `AIBOMControllerConfig` CRD is replaced by an older schema
@@ -348,6 +368,7 @@ All notable changes to k8s-aibom are documented here. The format follows
   sinks that already succeeded are re-emitted on the retry; the
   default timestamped GCS path template makes that a duplicate
   archive object, never an overwrite.
+
 - **The bootstrap-race deferral now requeues explicitly.** It
   previously waited for a status-update watch event that the
   Owns-watch's GenerationChangedPredicate filters out — an AIBOM
@@ -355,7 +376,7 @@ All notable changes to k8s-aibom are documented here. The format follows
   until an unrelated event arrived, and the empty result could
   collapse a concurrently scheduled sink retry.
 
-## [1.5.1] - UNRELEASED (security PATCH)
+## [1.5.1] - 2026-09-28 (security PATCH)
 
 ### Fixed
 
@@ -513,7 +534,6 @@ the rollout loudly and safely, with the previous pod still serving.
   into one invalid stream and `kubectl apply` silently applies only the
   first — breaking the documented CRD-upgrade command exactly when it
   matters. Found by the rc.3 boundary test's recovery step.
-
 
 ### Added
 

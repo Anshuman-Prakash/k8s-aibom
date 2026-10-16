@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -167,7 +168,9 @@ func startCombinedEnvTest(t *testing.T) *combinedEnv {
 	go func() { mgrErrCh <- mgr.Start(mgrCtx) }()
 	t.Cleanup(func() {
 		mgrCancel()
-		<-mgrErrCh
+		if err := <-mgrErrCh; err != nil && !errors.Is(err, context.Canceled) {
+			t.Logf("manager stopped with error: %v", err)
+		}
 	})
 	if !mgr.GetCache().WaitForCacheSync(mgrCtx) {
 		t.Fatal("manager cache failed to sync")

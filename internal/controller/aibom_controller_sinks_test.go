@@ -164,7 +164,12 @@ func startEnvTestWithSinks(t *testing.T, sinks []sink.Sink) *envTestEnv {
 	mgrCtx, mgrCancel := context.WithCancel(context.Background())
 	mgrErrCh := make(chan error, 1)
 	go func() { mgrErrCh <- mgr.Start(mgrCtx) }()
-	t.Cleanup(func() { mgrCancel(); <-mgrErrCh })
+	t.Cleanup(func() {
+		mgrCancel()
+		if err := <-mgrErrCh; err != nil && !errors.Is(err, context.Canceled) {
+			t.Logf("manager stopped with error: %v", err)
+		}
+	})
 	if !mgr.GetCache().WaitForCacheSync(mgrCtx) {
 		t.Fatal("manager cache failed to sync")
 	}
