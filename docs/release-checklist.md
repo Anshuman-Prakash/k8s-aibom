@@ -2,7 +2,8 @@
 
 Every release — including release candidates — walks this list top to
 bottom. A release is one coherent artifact set: tag, binary, image, chart,
-install.yaml, SBOM, provenance. If any step fails, fix and restart from
+CRDs chart (`k8s-aibom-crds`, same version), install.yaml, SBOM,
+provenance. If any step fails, fix and restart from
 the tag step with a new version.
 
 ## Before tagging
@@ -53,8 +54,9 @@ commit:
 
 1. Tag the verified commit: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 2. The release workflow builds and publishes: multi-arch image (ghcr),
-   Helm chart (OCI), install.yaml (digest-pinned), SBOM, provenance
-   attestations, GitHub release with notes.
+   Helm chart and CRDs chart (OCI, same version, both attested),
+   install.yaml (digest-pinned), SBOM, provenance attestations, GitHub
+   release with notes.
 
 ## After publishing
 
@@ -63,15 +65,17 @@ commit:
    plugin archive offline from the release assets alone:
    `gh attestation verify kubectl-aibom_<tag>_linux_amd64.tar.gz --owner
    GoogleCloudPlatform --bundle kubectl-aibom_<tag>.provenance.intoto.jsonl`.
-   The four `*.intoto.jsonl` assets (image provenance, image SBOM, chart
-   provenance, plugin provenance) must all be present; the Scorecard
-   Signed-Releases check reads them.
-2. `helm install` from the published OCI chart on a clean kind cluster;
-   confirm the digest-pinned image pulls.
+   The five `*.intoto.jsonl` assets (image provenance, image SBOM, chart
+   provenance, CRDs-chart provenance, plugin provenance) must all be
+   present; the Scorecard Signed-Releases check reads them.
+2. `helm install` the published CRDs chart, then the main chart, from
+   OCI on a clean kind cluster; confirm the digest-pinned image pulls
+   and the CRDs carry `app.kubernetes.io/managed-by=Helm`.
 3. `kubectl apply` the release install.yaml on a clean cluster; confirm
    readiness.
 4. First release of a new package only: set ghcr package visibility to
-   public and confirm repository linkage.
+   public and confirm repository linkage. (v1.6.0: the new
+   `charts/k8s-aibom-crds` package.)
 5. Update the adoption metrics log (image pull baseline for the new
    version).
 

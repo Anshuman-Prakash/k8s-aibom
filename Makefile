@@ -70,6 +70,29 @@ manifests: controller-gen
 	@# CRD and the documented migration command silently half-applies
 	@# (found by the v1.3.0 rc boundary test). install.yaml assembly
 	@# strips separators per-file itself, so it is unaffected.
+	$(MAKE) chart-crds
+
+# chart-crds propagates the generated CRDs into both charts (#77):
+#   charts/k8s-aibom/crds/            verbatim copies (Helm installs once,
+#                                     never upgrades)
+#   charts/k8s-aibom-crds/templates/  the same files with
+#                                     helm.sh/resource-policy: keep added,
+#                                     so Helm upgrades them and never
+#                                     deletes them on uninstall
+# `make verify-chart-crds` fails when either copy drifts from
+# config/crd/bases; CI runs it.
+.PHONY: chart-crds
+chart-crds:
+	@for file in config/crd/bases/*.yaml; do \
+		cp $$file charts/k8s-aibom/crds/$$(basename $$file); \
+		awk '{print} /controller-gen.kubebuilder.io\/version:/ && !done {print "    helm.sh/resource-policy: keep"; done=1}' \
+			$$file > charts/k8s-aibom-crds/templates/$$(basename $$file); \
+	done
+
+.PHONY: verify-chart-crds
+verify-chart-crds: chart-crds
+	@git diff --exit-code -- charts/k8s-aibom/crds charts/k8s-aibom-crds/templates \
+		|| { echo "chart CRDs drifted from config/crd/bases; run 'make chart-crds' and commit"; exit 1; }
 
 .PHONY: generate
 generate: controller-gen

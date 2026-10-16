@@ -59,6 +59,22 @@ All notable changes to k8s-aibom are documented here. The format follows
   `openvino/ubuntu24_dev`, `openvino/cvat_server`) and other registries
   stay unmatched.
 
+- **`k8s-aibom-crds` companion chart** (#77, requested by NVIDIA AICR).
+  The two CRDs are also published as their own chart,
+  `oci://ghcr.io/googlecloudplatform/charts/k8s-aibom-crds`, at the same
+  version and from the same tag-triggered, attested pipeline as the main
+  chart. Helm never upgrades CRDs shipped in a chart's `crds/` directory,
+  so a controller upgrade whose CRDs changed used to run against the
+  previous schema unless the operator applied the CRDs by hand; with the
+  companion chart the CRDs are an ordinary release, upgraded first, then
+  the controller. Each CRD carries `helm.sh/resource-policy: keep`, so
+  uninstalling the CRDs chart never deletes inventory. **Artifact-set
+  change for downstream distributions:** a release now comprises image,
+  main chart, CRDs chart, install.yaml and attestations; the main chart
+  keeps its `crds/` directory, so single-chart installs and `install.yaml`
+  are unchanged. CI installs the two charts in the documented order; the
+  chart copies of the CRDs are generated from `config/crd/bases` and
+  checked for drift.
 - **Runtime image-name boundary guards** (#165). TGI (Docker Hub and
   GHCR), Triton, Ollama, SGLang, LMDeploy, TEI and LiteLLM no longer
   attribute similarly named images as runtimes. Tag, digest and bare
