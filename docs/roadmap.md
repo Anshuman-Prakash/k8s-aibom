@@ -29,7 +29,7 @@ tier, [Design 002](design/002-sigstore-rekor-verifier.md), two rounds
 of external review), the output sanitization guarantee, the
 `kubectl aibom` plugin, and the non-default-configuration e2e matrix.
 
-## Next — v1.6, the coverage release
+## v1.6 — the coverage release (October 2026)
 
 - **CRD workload scrapers: Dynamo, NIMService, LeaderWorkerSet** —
   [Design 003](design/003-nimservice-lws-scrapers.md) merged

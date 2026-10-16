@@ -106,7 +106,7 @@ Releases publish a signed multi-arch image (linux/amd64, linux/arm64) with build
 
 ```bash
 helm install k8s-aibom oci://ghcr.io/googlecloudplatform/charts/k8s-aibom \
-  --version 1.5.1 \
+  --version 1.6.0 \
   --namespace k8s-aibom-system \
   --create-namespace
 ```
@@ -117,9 +117,9 @@ The chart carries the CRDs in its `crds/` directory, which Helm installs once an
 
 ```bash
 helm install k8s-aibom-crds oci://ghcr.io/googlecloudplatform/charts/k8s-aibom-crds \
-  --version 1.5.1 --namespace k8s-aibom-system --create-namespace
+  --version 1.6.0 --namespace k8s-aibom-system --create-namespace
 helm install k8s-aibom oci://ghcr.io/googlecloudplatform/charts/k8s-aibom \
-  --version 1.5.1 --namespace k8s-aibom-system
+  --version 1.6.0 --namespace k8s-aibom-system
 ```
 
 Both charts ship at the same version from the same release and are attested the same way. The main chart's `crds/` directory stays, so a single-chart install keeps working; Helm skips CRDs that already exist.
@@ -127,7 +127,7 @@ Both charts ship at the same version from the same release and are attested the 
 ### Install with kubectl
 
 ```bash
-kubectl apply -f https://github.com/GoogleCloudPlatform/k8s-aibom/releases/download/v1.5.1/install.yaml
+kubectl apply -f https://github.com/GoogleCloudPlatform/k8s-aibom/releases/download/v1.6.0/install.yaml
 ```
 
 Always install from a release asset; the `install.yaml` at the repo root is a development artifact.
@@ -360,7 +360,7 @@ See [docs/compatibility.md](docs/compatibility.md) for the tested matrix and sup
 
 ## Roadmap
 
-Releases ship on a monthly train ([VERSIONING.md](VERSIONING.md)); delivered work is in the [CHANGELOG](CHANGELOG.md). Latest: **v1.5.0**, the trust release — Sigstore/OMS signature verification (the `verified` tier), the output sanitization guarantee, and the `kubectl aibom` plugin. Next: **v1.6** extends workload coverage (operator-managed CRD kinds, CronJob completeness, a configurable workload-kind allowlist).
+Releases ship on a monthly train ([VERSIONING.md](VERSIONING.md)); delivered work is in the [CHANGELOG](CHANGELOG.md). Latest: **v1.6.0**, the coverage release — NVIDIA Dynamo, NIM Operator, LeaderWorkerSet, llm-d `DisaggregatedSet` and CronJob as reported kinds, ownership roll-up (one workload, one AIBOM), a workload-kind allowlist, the companion CRDs chart, and third-party CRD outages that degrade one kind instead of the controller. Next: **v1.7** aligns the document with CycloneDX 2.0 conventions (one byte-shape transition), adds `InferencePool` membership as a routing fact, and closes the "opted in, nothing matched" observability gap.
 
 Full detail in [docs/roadmap.md](docs/roadmap.md).
 
