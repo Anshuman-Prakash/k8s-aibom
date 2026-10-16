@@ -52,6 +52,13 @@ All notable changes to k8s-aibom are documented here. The format follows
 
 ### Added
 
+- **OpenVINO Model Server runtime pattern** (#164).
+  `openvino/model_server` (tag and digest forms) attributes as runtime
+  `openvino-model-server`. Publisher-anchored at the image-name
+  boundary, so other `openvino/*` images (`openvino/ubuntu24_runtime`,
+  `openvino/ubuntu24_dev`, `openvino/cvat_server`) and other registries
+  stay unmatched.
+
 - **`k8s-aibom-crds` companion chart** (#77, requested by NVIDIA AICR).
   The two CRDs are also published as their own chart,
   `oci://ghcr.io/googlecloudplatform/charts/k8s-aibom-crds`, at the same

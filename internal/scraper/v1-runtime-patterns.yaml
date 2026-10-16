@@ -218,6 +218,17 @@ runtimeImagePatterns:
   - runtime: huggingface
     pattern: '^kserve/huggingfaceserver(?:[:@]|$)'
 
+  # OpenVINO Model Server — openvino/model_server on Docker Hub. Intel's
+  # OpenVINO Model Server serves LLMs through an OpenAI-compatible API on
+  # Intel CPUs, iGPUs and discrete GPUs. Anchored at the image-name
+  # boundary so tag and digest forms match (including 2026.4.1,
+  # 2026.4.1-gpu, latest, latest-gpu, weekly) while other openvino/*
+  # images (openvino/ubuntu24_runtime, openvino/ubuntu24_dev,
+  # openvino/cvat_server) and other registries do not. Not a prefix and
+  # not a mirror pattern.
+  - runtime: openvino-model-server
+    pattern: '^openvino/model_server(?:[:@]|$)'
+
   # NOT added in Phase 11: registry-prefix matching for mirrored
   # images (Artifact Registry, ECR, private mirrors). The asymmetry
   # between false negatives (honest BOM with unresolved runtime) and
