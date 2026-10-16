@@ -60,6 +60,18 @@ jobs:
     - name: Load image into Kind
       run: kind load docker-image k8s-aibom:ci-test --name chart-testing
 
+    # CRDs chart first, then the controller chart (the documented order,
+    # #77). The controller chart's own crds/ directory then finds the
+    # CRDs already present and skips them, which is the coexistence this
+    # job asserts.
+    - name: Deploy CRDs chart
+      run: |
+        helm install k8s-aibom-crds ./charts/k8s-aibom-crds \
+          --namespace k8s-aibom-system \
+          --create-namespace
+        kubectl get crd aiboms.aibom.k8saibom.dev aibomcontrollerconfigs.aibom.k8saibom.dev \
+          -o jsonpath='{range .items[*]}{.metadata.name}{" managed-by="}{.metadata.labels.app\.kubernetes\.io/managed-by}{"\n"}{end}'
+
     - name: Deploy Controller
       run: |
         helm install k8s-aibom ./charts/k8s-aibom \

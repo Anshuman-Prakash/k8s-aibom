@@ -19,6 +19,8 @@ helm install k8s-aibom oci://ghcr.io/googlecloudplatform/charts/k8s-aibom \
 kubectl label namespace <your-ai-namespace> aibom.k8saibom.dev/enabled=true
 ```
 
+If you will upgrade with Helm or Helmfile, install the companion `k8s-aibom-crds` chart first (same version); it makes CRD changes an ordinary release upgrade instead of a manual apply. See [Upgrades](../README.md#upgrades).
+
 The published chart pins the controller image by digest and every
 release ships provenance and SBOM attestations — verify them with
 `gh attestation verify` or cosign against the release identity,

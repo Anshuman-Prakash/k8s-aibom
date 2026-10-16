@@ -64,6 +64,8 @@ jobs:
       run: |
         helm package charts/k8s-aibom --version "0.0.0-dryrun" --app-version "v0.0.0-dryrun" --destination dist/
         test -f dist/k8s-aibom-0.0.0-dryrun.tgz
+        helm package charts/k8s-aibom-crds --version "0.0.0-dryrun" --app-version "v0.0.0-dryrun" --destination dist/
+        test -f dist/k8s-aibom-crds-0.0.0-dryrun.tgz
 
     - name: Generate install.yaml
       # HELM override: the Makefile defaults to ./bin/helm and its

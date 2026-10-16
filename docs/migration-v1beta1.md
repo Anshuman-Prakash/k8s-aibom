@@ -9,7 +9,11 @@ on `v1beta1`**. Design and rationale:
 
 **Apply the new CRDs before (or with) the chart upgrade.** Helm,
 Helmfile, and Flux (default `Skip`) never update existing CRDs on a
-chart upgrade; only Argo CD does:
+chart upgrade; only Argo CD does. Since v1.6 the release ships a
+companion `k8s-aibom-crds` chart that makes this an ordinary upgrade
+(upgrade it first, then the main chart; adoption of pre-existing CRDs
+is a one-time step described in
+[its README](../charts/k8s-aibom-crds/README.md)). Without it:
 
 ```bash
 helm show crds oci://ghcr.io/googlecloudplatform/charts/k8s-aibom --version <new> \
