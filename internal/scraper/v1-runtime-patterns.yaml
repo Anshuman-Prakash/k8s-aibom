@@ -163,6 +163,19 @@ runtimeImagePatterns:
   - runtime: vllm
     pattern: '^public\.ecr\.aws/q9t5s3a7/vllm-cpu-release-repo(?:[:@]|$)'
 
+  # AWS Deep Learning Containers vLLM — vLLM image in AWS's own public
+  # ECR namespace (deep-learning-containers). Tag-independent: EC2 and
+  # SageMaker builds (0.31.0-gpu-py312-cu130-ubuntu24.04-ec2,
+  # server-sagemaker-cuda-v2.6) and digest forms match. Anchored to that
+  # namespace at the image-name boundary, so this entry does not match
+  # sibling repositories (pytorch-inference, vllm-arm64,
+  # huggingface-vllm), other public ECR aliases, private-account ECR
+  # copies, or the same path on another registry. Images on other
+  # registries remain subject to their own entries (the GHCR vLLM entry
+  # above is unchanged). Not a prefix and not a mirror pattern.
+  - runtime: vllm
+    pattern: '^public\.ecr\.aws/deep-learning-containers/vllm(?:[:@]|$)'
+
   # Infinity — michaelf34/infinity embeddings and reranking server on
   # Docker Hub. Anchored at the image-name boundary so tag and digest
   # forms match (including 0.0.77-cpu and 0.0.77-rocm) while
