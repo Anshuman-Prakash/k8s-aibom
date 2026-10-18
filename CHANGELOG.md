@@ -4,6 +4,17 @@ All notable changes to k8s-aibom are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
+## [Unreleased]
+
+### Added
+
+- **LocalAI runtime pattern** (#178). `localai/localai` and
+  `quay.io/go-skynet/local-ai` (CPU, GPU, AIO, master and digest forms)
+  attribute as runtime `localai`. LocalAI publishes every build to both
+  repositories, so both are the publisher's own. Anchored at the
+  image-name boundary, so name-prefix lookalikes, other users'
+  repositories and other registries stay unmatched.
+
 ## [1.6.0] - 2026-10-19
 
 The coverage release. One AIBOM per AI workload across the operator-managed
