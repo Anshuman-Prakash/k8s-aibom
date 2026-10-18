@@ -526,6 +526,20 @@ func TestInferenceConfig_DetectRuntime(t *testing.T) {
 		{"openvino/cvat_server:latest", ""},
 		{"docker.io/openvino/model_server:latest", ""},
 		{"ghcr.io/openvino/model_server:latest", ""},
+
+		// Speaches — publisher-anchored GHCR image (successor of
+		// fedirz/faster-whisper-server). CPU, CUDA, sha- and digest forms
+		// match; name-prefix, other-org and other-registry near-misses
+		// do not.
+		{"ghcr.io/speaches-ai/speaches:0.9.0-rc.3-cpu", "speaches"},
+		{"ghcr.io/speaches-ai/speaches:0.9.0-rc.3-cuda", "speaches"},
+		{"ghcr.io/speaches-ai/speaches:0.9.0-rc.3-cuda-12.6.3", "speaches"},
+		{"ghcr.io/speaches-ai/speaches:sha-24f209c-cpu", "speaches"},
+		{"ghcr.io/speaches-ai/speaches@" + testFullDigest, "speaches"},
+		{"ghcr.io/speaches-ai/speaches-extra:0.9.0", ""},
+		{"ghcr.io/someone/speaches:0.9.0-cpu", ""},
+		{"speaches-ai/speaches:0.9.0-cpu", ""},
+		{"quay.io/speaches-ai/speaches:0.9.0-cpu", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.image, func(t *testing.T) {
