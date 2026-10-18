@@ -4,18 +4,6 @@ All notable changes to k8s-aibom are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
-## [Unreleased]
-
-### Added
-
-- **Speaches speech server runtime pattern** (#177).
-  `ghcr.io/speaches-ai/speaches` (CPU, CUDA, sha- and digest forms)
-  attributes as runtime `speaches`. Speaches is the renamed
-  continuation of `fedirz/faster-whisper-server`, whose entry is
-  unchanged. Publisher-anchored at the image-name boundary, so
-  `speaches-extra`, other GHCR orgs and other registries stay
-  unmatched.
-
 ## [1.6.0] - 2026-10-19
 
 The coverage release. One AIBOM per AI workload across the operator-managed
