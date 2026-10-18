@@ -526,6 +526,20 @@ func TestInferenceConfig_DetectRuntime(t *testing.T) {
 		{"openvino/cvat_server:latest", ""},
 		{"docker.io/openvino/model_server:latest", ""},
 		{"ghcr.io/openvino/model_server:latest", ""},
+
+		// TensorRT-LLM standalone release image on NGC. GA, rc, dev and
+		// digest forms match; the devel build image, a name-prefix
+		// lookalike and the same path on another registry stay quiet.
+		{"nvcr.io/nvidia/tensorrt-llm/release:1.0.0", "tensorrt-llm"},
+		{"nvcr.io/nvidia/tensorrt-llm/release:1.3.0rc9", "tensorrt-llm"},
+		{"nvcr.io/nvidia/tensorrt-llm/release:1.4.0rc1.dev202610180007", "tensorrt-llm"},
+		{"nvcr.io/nvidia/tensorrt-llm/release@" + testFullDigest, "tensorrt-llm"},
+		{"nvcr.io/nvidia/tensorrt-llm/release:1.0.0@" + testFullDigest, "tensorrt-llm"},
+		{"nvcr.io/nvidia/tensorrt-llm/devel:1.0.0", ""},
+		{"nvcr.io/nvidia/tensorrt-llm/release-extra:1.0.0", ""},
+		{"nvcr.io/nvidia/tensorrt-llm:1.0.0", ""},
+		{"ghcr.io/nvidia/tensorrt-llm/release:1.0.0", ""},
+		{"mirror.example.com/nvcr.io/nvidia/tensorrt-llm/release:1.0.0", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.image, func(t *testing.T) {
