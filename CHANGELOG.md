@@ -4,18 +4,6 @@ All notable changes to k8s-aibom are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/) (see `VERSIONING.md`).
 
-## [Unreleased]
-
-### Added
-
-- **TensorRT-LLM release image runtime pattern** (#176).
-  `nvcr.io/nvidia/tensorrt-llm/release` (GA, rc, dev and digest forms)
-  attributes as runtime `tensorrt-llm`, the name the Dynamo
-  `tensorrtllm-runtime` entry already uses. Anchored at the image-name
-  boundary, so the `tensorrt-llm/devel` build image, name-prefix
-  lookalikes and other registries stay unmatched. No existing entry
-  changes.
-
 ## [1.6.0] - 2026-10-19
 
 The coverage release. One AIBOM per AI workload across the operator-managed
