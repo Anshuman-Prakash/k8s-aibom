@@ -242,6 +242,16 @@ runtimeImagePatterns:
   - runtime: openvino-model-server
     pattern: '^openvino/model_server(?:[:@]|$)'
 
+  # TensorRT-LLM — NVIDIA's standalone TensorRT-LLM release container on
+  # NGC, the image trtllm-serve deployments run outside Dynamo.
+  # Tag-independent: GA (1.0.0), rc (1.3.0rc9), dated dev builds and
+  # digest forms match. Anchored at the image-name boundary, so the
+  # sibling build image nvcr.io/nvidia/tensorrt-llm/devel (a toolchain,
+  # not a server), name-prefix lookalikes and other registries do not.
+  # Not a prefix and not a mirror pattern.
+  - runtime: tensorrt-llm
+    pattern: '^nvcr\.io/nvidia/tensorrt-llm/release(?:[:@]|$)'
+
   # NOT added in Phase 11: registry-prefix matching for mirrored
   # images (Artifact Registry, ECR, private mirrors). The asymmetry
   # between false negatives (honest BOM with unresolved runtime) and
